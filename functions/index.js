@@ -86,7 +86,8 @@ bot.start(async (ctx) => {
             [{ text: '👥 Список участников', callback_data: 'getParticipants' }, { text: '🏆 Победители', callback_data: 'getWinners' }],
             [{ text: '💰 Призовой фонд', callback_data: 'getPrizePool' }, { text: '🔄 Сброс', callback_data: 'reset' }],
             [{ text: '➕ Добавить участника', callback_data: 'addParticipant' }, { text: '🗑 Удалить участника', callback_data: 'deletePrompt' }],
-            [{ text: '📊 Статистика', callback_data: 'getStats' }, { text: '⏰ Установить таймер', callback_data: 'timerPrompt' }]
+            [{ text: '📊 Статистика', callback_data: 'getStats' }, { text: '⏰ Установить таймер', callback_data: 'timerPrompt' }],
+            [{ text: '🌐 Открыть приложение', web_app: { url: process.env.FRONTEND_URL || 'https://wheel-woad.vercel.app/' } }]
           ]
         }
       });
@@ -274,7 +275,8 @@ bot.on('callback_query', async (ctx) => {
     await ctx.reply('Все участники и призовой фонд сброшены!');
   } else if (data === 'timerPrompt') {
     // Запросить/показать текущее время розыгрыша (заглушка)
-    await ctx.reply('Функция установки таймера пока не реализована.');
+    await ctx.reply('Введите время следующего розыгрыша в формате ЧЧ:ММ (например 20:00):');
+    ctx.session.waitingForTimer = true;
   } else if (data === 'deletePrompt') {
     // Запросить имя для удаления участника
     await ctx.reply('Введите имя участника, которого нужно удалить, командой: /delete Имя');
