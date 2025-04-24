@@ -22,14 +22,7 @@ const app = express();
 app.use((req, res, next) => { console.log(`REQ ${req.method} ${req.url} from ${req.ip}`); next(); });
 // CORS configuration
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // allow non-browser or postman
-    // Ensure FRONTEND_URL is loaded from .env
-    const raw = process.env.FRONTEND_URL || '*';
-    const allowed = raw.split(',').map(s => s.trim());
-    if (allowed.includes('*') || allowed.includes(origin)) cb(null, true);
-    else cb(new Error(`CORS blocked: ${origin}`));
-  }
+  origin: '*'
 }));
 app.use(express.json()); // Replaced bodyParser.json()
 
