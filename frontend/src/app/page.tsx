@@ -185,8 +185,8 @@ export default function Home() {
           <p className="text-white text-xs sm:text-sm mb-1">До следующего розыгрыша:</p>
           <TimerDisplay onTimerEnd={handleTimerEnd} /> {/* Передаем обработчик завершения таймера */}
           <div className="mt-1 text-center">
-            <p className="text-white text-sm sm:text-base font-bold">Призовой фонд:</p>
-            <p className="text-green-400 text-xl sm:text-2xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
+           <p className="text-white text-lg sm:text-xl font-bold">Призовой фонд:</p>
+           <p className="text-green-400 text-2xl sm:text-3xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
           </div>
         </div>
 
