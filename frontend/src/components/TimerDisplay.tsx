@@ -52,7 +52,7 @@ export default function TimerDisplay({ onTimerEnd }: { onTimerEnd?: () => void }
   const s = (timer % 60).toString().padStart(2, '0');
 
   return (
-    <div className={`digital-timer font-mono text-2xl sm:text-3xl text-yellow-400 ${timer <= 10 && timer > 0 ? 'text-red-500 animate-pulse' : ''}`}>
+    <div className={`digital-timer font-mono font-bold text-3xl sm:text-4xl text-yellow-400 ${timer <= 10 && timer > 0 ? 'text-red-500 animate-pulse' : ''}`}>
       {h}:{m}:{s}
     </div>
   );
