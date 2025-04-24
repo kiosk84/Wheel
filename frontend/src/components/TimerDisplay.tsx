@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getTimer } from '../lib/api';
 
-export default function TimerDisplay() {
+export default function TimerDisplay({ onTimerEnd }: { onTimerEnd?: () => void }) {
   const [timer, setTimer] = useState(0);
 
   useEffect(() => {
@@ -26,16 +26,22 @@ export default function TimerDisplay() {
         setTimer(current);
         if (current === 0) {
           fetchTimer();
+          if (onTimerEnd) {
+            onTimerEnd();
+          }
         }
       } else {
         fetchTimer();
+        if (onTimerEnd) {
+          onTimerEnd();
+        }
       }
     }, 1000);
     return () => {
       mounted = false;
       clearInterval(id);
     };
-  }, []);
+  }, [onTimerEnd]); // Add onTimerEnd to dependency array
 
   const h = Math.floor(timer / 3600)
     .toString()
@@ -46,7 +52,7 @@ export default function TimerDisplay() {
   const s = (timer % 60).toString().padStart(2, '0');
 
   return (
-    <div className="digital-timer font-mono text-lg sm:text-xl text-yellow-400">
+    <div className={`digital-timer font-mono text-2xl sm:text-3xl text-yellow-400 ${timer <= 10 && timer > 0 ? 'text-red-500 animate-pulse' : ''}`}>
       {h}:{m}:{s}
     </div>
   );

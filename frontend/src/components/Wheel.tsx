@@ -1,7 +1,8 @@
 "use client";
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react'; // Убедимся, что React импортирован правильно
+import gsap from 'gsap'; // Добавляем импорт GSAP
 
-export interface Participant {
+export interface Participant { // Оставляем только одно определение интерфейса
   id: string;
   color: string;
   number?: number; // Добавляем номер участника
@@ -9,16 +10,54 @@ export interface Participant {
 
 interface WheelProps {
   participants: Participant[];
+  isSpinning: boolean; // Добавляем пропс для управления вращением
+  winningParticipantNumber: number | null; // Добавляем пропс для номера победителя
+  onSpinEnd: () => void; // Добавляем колбэк для завершения вращения
 }
 
-const Wheel: React.FC<WheelProps> = ({ participants }) => {
+const Wheel: React.FC<WheelProps> = ({ participants, isSpinning, winningParticipantNumber, onSpinEnd }) => {
   const wheelRef = useRef<SVGGElement>(null);
+  const [currentRotation, setCurrentRotation] = useState(0); // Состояние для текущего вращения
 
   const radius = 90; // Уменьшили с 120 до 90
   const center = 100; // Уменьшили с 120 до 100
   // Fallback to single gray segment when no participants
-  const items = participants.length > 0 ? participants : [{ id: 'placeholder', color: '#555' }];
+  const items = participants.length > 0 ? participants : [{ id: 'placeholder', color: '#555', number: 0 }]; // Добавляем number для fallback
   const sliceAngle = 360 / items.length;
+
+  useEffect(() => {
+    if (isSpinning && wheelRef.current && winningParticipantNumber !== null) {
+      const winnerIndex = items.findIndex(p => p.number === winningParticipantNumber);
+      if (winnerIndex === -1) {
+        console.error(`Участник с номером ${winningParticipantNumber} не найден.`);
+        onSpinEnd(); // Завершаем спин, если победитель не найден
+        return;
+      }
+
+      // Угол для остановки: середина сегмента победителя
+      // Учитываем, что указатель находится сверху (0 градусов)
+      // Сегменты начинаются с 0 градусов по часовой стрелке
+      // Угол сегмента победителя: winnerIndex * sliceAngle
+      // Середина сегмента: winnerIndex * sliceAngle + sliceAngle / 2
+      // Целевой угол для вращения колеса: 360 - (середина сегмента)
+      // Добавляем несколько полных оборотов для эффекта вращения
+      const baseAngle = 360 - (winnerIndex * sliceAngle + sliceAngle / 2);
+      const totalRotation = currentRotation + 360 * 5 + baseAngle - (currentRotation % 360); // Добавляем 5 полных оборотов + целевой угол
+
+      gsap.to(wheelRef.current, {
+        rotation: totalRotation,
+        duration: 5, // Длительность анимации в секундах
+        ease: "power2.out", // Плавное замедление
+        onComplete: () => {
+          setCurrentRotation(totalRotation % 360); // Обновляем текущее вращение
+          onSpinEnd(); // Вызываем колбэк по завершении
+        }
+      });
+    } else if (!isSpinning && wheelRef.current) {
+       // Если isSpinning стало false (например, при ошибке или сбросе), останавливаем анимацию
+       gsap.killTweensOf(wheelRef.current);
+    }
+  }, [isSpinning, winningParticipantNumber, participants]); // Добавляем зависимости
 
   return (
     <div className="flex flex-col items-center">
@@ -35,7 +74,8 @@ const Wheel: React.FC<WheelProps> = ({ participants }) => {
           </radialGradient>
         </defs>
         <circle cx={center} cy={center} r={radius} fill="url(#wheelBackground)" />
-        <g ref={wheelRef} style={{ transformOrigin: `${center}px ${center}px` }}>
+        {/* Применяем вращение к группе сегментов */}
+        <g ref={wheelRef} style={{ transformOrigin: `${center}px ${center}px`, transform: `rotate(${currentRotation}deg)` }}>
           {items.length === 1 ? (
             <circle
               cx={center}

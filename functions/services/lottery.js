@@ -1,39 +1,62 @@
 const db = require('../db');
 const { bot, ADMIN_ID } = require('../bot');
+const logger = require('../logger'); // Предполагается, что у вас есть модуль логирования
 
-function runLottery() {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM participants', [], (err, participants) => {
-      if (err) return reject(err);
-      if (!participants || participants.length === 0) {
-        return resolve(null);
-      }
+async function runLottery() {
+  try {
+    logger.info('Запуск авто-розыгрыша...');
 
-      const winner = participants[Math.floor(Math.random() * participants.length)];
-      const prizePool = participants.length * 100;
+    const participants = await db.all('SELECT * FROM participants', []);
 
-      db.run(
-        'INSERT INTO winners (name, telegramId, prize, timestamp) VALUES (?, ?, ?, ?)',
-        [winner.name, winner.telegramId, prizePool, Date.now()],
-        (err) => {
-          if (err) return reject(err);
+    if (!participants || participants.length === 0) {
+      logger.info('Нет участников для розыгрыша.');
+      return null;
+    }
 
-          // Notify only the winner
-          bot.telegram.sendMessage(winner.telegramId, `🎉 Поздравляем, ${winner.name}! Вы выиграли ${prizePool} ₽!`);
+    const winner = participants[Math.floor(Math.random() * participants.length)];
+    const prizePool = participants.length * 100;
 
-          bot.telegram.sendMessage(
-            ADMIN_ID,
-            `Розыгрыш завершён! Победитель: ${winner.name}. Приз: ${prizePool} ₽.`
-          );
+    await db.run(
+      'INSERT INTO winners (name, telegramId, prize, timestamp) VALUES (?, ?, ?, ?)',
+      [winner.name, winner.telegramId, prizePool, Date.now()]
+    );
+    logger.info(`Победитель розыгрыша: ${winner.name} (ID: ${winner.telegramId}), Приз: ${prizePool} ₽.`);
 
-          db.run('DELETE FROM participants', []);
-          db.run('UPDATE prize_pool SET amount = 0 WHERE id = 1');
+    // Уведомить только победителя
+    try {
+      await bot.telegram.sendMessage(winner.telegramId, `🎉 Поздравляем, ${winner.name}! Вы выиграли ${prizePool} ₽!`);
+      logger.info(`Уведомление отправлено победителю ${winner.name}.`);
+    } catch (telegramError) {
+      logger.error(`Ошибка отправки уведомления победителю ${winner.name}:`, telegramError);
+      // Продолжаем выполнение, даже если не удалось отправить сообщение победителю
+    }
 
-          resolve(winner.name);
-        }
+
+    try {
+      await bot.telegram.sendMessage(
+        ADMIN_ID,
+        `Розыгрыш завершён! Победитель: ${winner.name}. Приз: ${prizePool} ₽.`
       );
-    });
-  });
+      logger.info(`Уведомление отправлено администратору.`);
+    } catch (telegramError) {
+       logger.error(`Ошибка отправки уведомления администратору:`, telegramError);
+       // Продолжаем выполнение, даже если не удалось отправить сообщение администратору
+    }
+
+
+    await db.run('DELETE FROM participants', []);
+    logger.info('Список участников очищен.');
+
+    await db.run('UPDATE prize_pool SET amount = 0 WHERE id = 1');
+    logger.info('Призовой фонд сброшен.');
+
+    logger.info('Авто-розыгрыш завершён успешно.');
+    return winner.name;
+
+  } catch (e) {
+    logger.error('Ошибка при выполнении розыгрыша:', e);
+    throw e; // Перевыбрасываем ошибку для обработки на более высоком уровне (например, в планировщике)
+  }
 }
 
 module.exports = runLottery;

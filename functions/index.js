@@ -95,7 +95,7 @@ bot.start(async (ctx) => {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '➡️ Открыть приложение', web_app: { url: 'https://aidevil.vercel.app/' } }
+              { text: '➡️ Открыть приложение', web_app: { url: 'https://wheel-woad.vercel.app/' } }
             ]
           ]
         }
@@ -182,7 +182,7 @@ bot.on('callback_query', async (ctx) => {
                            {
                              reply_markup: {
                                inline_keyboard: [
-                                 [{ text: '🎮 Открыть приложение', web_app: { url: process.env.FRONTEND_URL || 'https://aidevil.vercel.app/' } }]
+                                 [{ text: '🎮 Открыть приложение', web_app: { url: process.env.FRONTEND_URL || 'https://wheel-woad.vercel.app/' } }]
                                ]
                              }
                            }
@@ -226,7 +226,7 @@ bot.on('callback_query', async (ctx) => {
               {
                 reply_markup: {
                   inline_keyboard: [
-                    [{ text: '🔄 Попробовать снова', web_app: { url: process.env.FRONTEND_URL || 'https://aidevil.vercel.app/' } }]
+                    [{ text: '🔄 Попробовать снова', web_app: { url: process.env.FRONTEND_URL || 'https://wheel-woad.vercel.app/' } }]
                   ]
                 }
               }

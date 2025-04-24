@@ -27,18 +27,32 @@ export default function Home() {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showPending, setShowPending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [winningParticipantNumber, setWinningParticipantNumber] = useState<number | null>(null);
+  const [isSpinning, setIsSpinning] = useState(false);
+
 
   // Функция для обновления данных
-  const reload = () => {
-    // Загружаем список участников (обычный и детальный)
-    getParticipants().then(setParticipants).catch(console.error);
-    getDetailedParticipants().then(setDetailedParticipants).catch(console.error);
+  const reload = async () => {
+    try {
+      // Загружаем список участников (обычный и детальный)
+      const participantsData = await getParticipants();
+      setParticipants(participantsData);
 
-    // Загружаем список ожидающих подтверждения
-    getPending().then(data => {
-      const pendingNames = data.map(item => item.name);
+      const detailedParticipantsData = await getDetailedParticipants();
+      setDetailedParticipants(detailedParticipantsData);
+
+      // Загружаем список ожидающих подтверждения
+      const pendingData = await getPending();
+      const pendingNames = pendingData.map(item => item.name);
       setPendingUsers(pendingNames);
-    }).catch(console.error);
+
+      // Загружаем призовой фонд
+      const prizepoolData = await getPrizepool();
+      setPrizePool(prizepoolData.total);
+
+    } catch (error) {
+      console.error('Ошибка при обновлении данных:', error);
+    }
   };
 
   useEffect(() => {
@@ -54,10 +68,8 @@ export default function Home() {
         if (user?.id) setTelegramId(user.id.toString());
       }
     }
-    getPrizepool().then(data => setPrizePool(data.total)).catch(console.error);
     // TimerDisplay handles timer polling and auto-spin
-    const interval = setInterval(() => {}, 1000);
-    return () => clearInterval(interval);
+    // Removed the redundant interval here
   }, []);
 
   useEffect(() => {
@@ -84,7 +96,7 @@ export default function Home() {
         color: colors[p.number % colors.length],
         number: p.number // Добавляем номер участника
       }))
-    : [{ id: 'fallback', color: colors[0] }];
+    : [{ id: 'fallback', color: colors[0], number: 0 }]; // Добавляем number для fallback
 
   const handleParticipate = async () => {
     if (!telegramId) {
@@ -108,6 +120,54 @@ export default function Home() {
     }
   };
 
+  const handleTimerEnd = async () => {
+    console.log('Таймер завершен, запускаем процесс розыгрыша на фронтенде...');
+    setIsSpinning(true); // Начинаем анимацию вращения
+
+    // Ждем немного, чтобы дать бэкенду время завершить розыгрыш
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Обновляем данные после розыгрыша
+    await reload();
+
+    // Получаем список победителей, чтобы найти последнего
+    try {
+      const winners = await getWinners();
+      if (winners && winners.length > 0) {
+        // Предполагаем, что последний победитель в списке - это победитель только что завершившегося розыгрыша
+        // В более надежной системе бэкенд должен предоставлять API для получения текущего победителя
+        const latestWinner = winners[winners.length - 1];
+        console.log('Последний победитель:', latestWinner);
+
+        // Находим номер победителя среди детальных участников (если они еще доступны)
+        const winnerDetails = detailedParticipants.find(p => p.name === latestWinner.name);
+
+        if (winnerDetails) {
+           setWinningParticipantNumber(winnerDetails.number);
+           console.log('Номер победителя для колеса:', winnerDetails.number);
+        } else {
+           // Если детальные участники уже очищены, возможно, нужно запросить их снова или
+           // бэкенд должен возвращать номер победителя напрямую после розыгрыша.
+           // Пока просто логируем и не устанавливаем номер для спина.
+           console.warn('Не удалось найти номер победителя среди текущих детальных участников.');
+           // В этом случае колесо просто остановится без привязки к конкретному номеру
+           setIsSpinning(false); // Останавливаем анимацию, если не можем найти номер
+        }
+
+      } else {
+        console.log('Список победителей пуст после розыгрыша.');
+        setIsSpinning(false); // Останавливаем анимацию, если нет победителей
+      }
+    } catch (error) {
+      console.error('Ошибка при получении победителей после розыгрыша:', error);
+      setIsSpinning(false); // Останавливаем анимацию при ошибке
+    }
+
+    // Анимация остановки колеса будет управляться в WheelComponent
+    // После завершения анимации в WheelComponent, setIsSpinning(false) будет вызван там.
+  };
+
+
   if (loading) return <SplashScreen />;
   return (
     <div className="min-h-screen bg-gray-900 text-white p-0 flex flex-col">
@@ -123,7 +183,7 @@ export default function Home() {
       <div className="flex-1 flex flex-col items-center justify-evenly px-2 sm:px-4 pt-4 sm:pt-6 pb-1 min-h-0 max-w-screen-sm mx-auto w-full">
         <div className="mb-2 sm:mb-3 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md p-2 sm:p-3 rounded-md text-center">
           <p className="text-white text-xs sm:text-sm mb-1">До следующего розыгрыша:</p>
-          <TimerDisplay />
+          <TimerDisplay onTimerEnd={handleTimerEnd} /> {/* Передаем обработчик завершения таймера */}
           <div className="mt-1 text-center">
             <p className="text-white text-sm sm:text-base font-bold">Призовой фонд:</p>
             <p className="text-green-400 text-xl sm:text-2xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
@@ -132,7 +192,12 @@ export default function Home() {
 
         {/* Колесо с эффектом свечения */}
         <div className="-mt-2 sm:-mt-4 neon-glow p-2 mb-2 sm:mb-3">
-          <WheelComponent participants={participantsWithColor} />
+          <WheelComponent
+             participants={participantsWithColor}
+             winningParticipantNumber={winningParticipantNumber}
+             isSpinning={isSpinning}
+             onSpinEnd={() => setIsSpinning(false)} // Колесо вызовет это, когда остановится
+          />
         </div>
 
         {/* Unified Participate & Participants container */}
