@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { getParticipants, getPrizepool, checkPending, getPending, getDetailedParticipants, ParticipantWithNumber } from '../lib/api';
+import { getParticipants, getPrizepool, checkPending, getPending, getDetailedParticipants, getWinners, ParticipantWithNumber } from '../lib/api';
 import WheelComponent, { Participant } from '../components/Wheel';
 import TimerDisplay from '../components/TimerDisplay';
 import ParticipantList from '../components/ParticipantList';
