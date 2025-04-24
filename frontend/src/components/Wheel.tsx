@@ -22,7 +22,10 @@ const Wheel: React.FC<WheelProps> = ({ participants, isSpinning, winningParticip
   const radius = 90; // Уменьшили с 120 до 90
   const center = 100; // Уменьшили с 120 до 100
   // Fallback to single gray segment when no participants
-  const items = participants.length > 0 ? participants : [{ id: 'placeholder', color: '#555', number: 0 }]; // Добавляем number для fallback
+  const items = React.useMemo(() => {
+    return participants.length > 0 ? participants : [{ id: 'placeholder', color: '#888888', number: 0 }];
+  }, [participants]); // Мемоизация items для предотвращения лишних рендеров и изменения зависимостей
+
   const sliceAngle = 360 / items.length;
 
   useEffect(() => {
@@ -57,7 +60,7 @@ const Wheel: React.FC<WheelProps> = ({ participants, isSpinning, winningParticip
        // Если isSpinning стало false (например, при ошибке или сбросе), останавливаем анимацию
        gsap.killTweensOf(wheelRef.current);
     }
-  }, [isSpinning, winningParticipantNumber, participants]); // Добавляем зависимости
+  }, [isSpinning, winningParticipantNumber, participants, currentRotation, items, onSpinEnd, sliceAngle]); // Исправлены зависимости useEffect для устранения предупреждения eslint
 
   return (
     <div className="flex flex-col items-center">
@@ -101,7 +104,7 @@ const Wheel: React.FC<WheelProps> = ({ participants, isSpinning, winningParticip
                 <React.Fragment key={p.id}>
                   <path
                     d={`M${center},${center} L${x1},${y1} A${radius},${radius} 0 0,1 ${x2},${y2} Z`}
-                    fill={p.color}
+          fill={p.color || '#FF6347'} // Добавлен fallback цвет для сегментов
                   />
                   {/* Добавляем номер участника с адаптивным размером и улучшенным стилем */}
                   <text

@@ -104,6 +104,9 @@ export default function Home() {
       return;
     }
 
+    // Сохраняем telegramId для дальнейшей логики
+    console.log('Сохраняем telegramId пользователя:', telegramId);
+
     // Если пользователь - админ, сразу открываем модальное окно без проверки
     if (telegramId === process.env.NEXT_PUBLIC_ADMIN_ID || telegramId === '123456789') { // Используем переменную окружения или тестовый ID
       setModalOpen(true);
@@ -184,7 +187,7 @@ export default function Home() {
         <div className="mb-2 sm:mb-3 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md p-2 sm:p-3 rounded-md text-center">
           <p className="text-white text-xs sm:text-sm mb-1">До следующего розыгрыша:</p>
           <TimerDisplay onTimerEnd={handleTimerEnd} /> {/* Передаем обработчик завершения таймера */}
-          <div className="mt-1 text-center">
+          <div className="mt-1 text-center bg-gradient-to-r from-green-700 via-green-500 to-green-700 rounded-lg p-3 shadow-lg">
            <p className="text-white text-lg sm:text-xl font-bold">Призовой фонд:</p>
            <p className="text-green-400 text-2xl sm:text-3xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
           </div>
