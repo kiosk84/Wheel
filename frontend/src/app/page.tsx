@@ -28,6 +28,18 @@ export default function Home() {
   const [spinning, setSpinning] = useState(false);
   const [showParticipateModal, setShowParticipateModal] = useState(false);
 
+  // Проверка, открыт ли WebApp в Telegram
+  // const [notInTelegram, setNotInTelegram] = useState(false);
+
+  // useEffect(() => {
+  //   if (typeof window !== 'undefined') {
+  //     // Проверяем наличие Telegram WebApp
+  //     if (!window.Telegram?.WebApp) {
+  //       setNotInTelegram(true);
+  //     }
+  //   }
+  // }, []);
+
   // Функция для обновления данных
   const reload = async () => {
     try {
@@ -72,11 +84,13 @@ export default function Home() {
   }, []);
 
   const handleParticipate = async () => {
-    let id = telegramId;
-    // Попробовать получить telegramId из Telegram WebApp при нажатии, если не был сохранён
-    if (!id && typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+    // Всегда пробуем получить telegramId из Telegram WebApp при нажатии
+    let id = '';
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
       id = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
       setTelegramId(id);
+    } else if (telegramId) {
+      id = telegramId;
     }
     if (!id) {
       alert('Для участия нужен Telegram!');
@@ -128,6 +142,23 @@ export default function Home() {
   };
 
   if (loading) return <SplashScreen />;
+  // if (notInTelegram) {
+  //   return (
+  //     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-4">
+  //       <div className="bg-gray-800 rounded-xl p-6 max-w-xs w-full text-center shadow-lg">
+  //         <h2 className="text-lg font-bold mb-3">Вход только через Telegram</h2>
+  //         <p className="mb-4 text-sm">Пожалуйста, откройте это приложение через Telegram-бота, чтобы участвовать в розыгрыше.</p>
+  //         <a
+  //           href="https://t.me/your_bot_username"
+  //           className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-5 py-3 text-base transition-colors duration-150 shadow-md w-full"
+  //           style={{ maxWidth: 320 }}
+  //         >
+  //           Открыть бота в Telegram
+  //         </a>
+  //       </div>
+  //     </div>
+  //   );
+  // }
   return (
     <div className="min-h-screen bg-gray-900 text-white p-0 flex flex-col">
       <Navbar onMenuToggleAction={() => setSidebarOpen(true)} />
