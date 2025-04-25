@@ -72,12 +72,18 @@ export default function Home() {
   }, []);
 
   const handleParticipate = async () => {
-    if (!telegramId) {
+    let id = telegramId;
+    // Попробовать получить telegramId из Telegram WebApp при нажатии, если не был сохранён
+    if (!id && typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+      id = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+      setTelegramId(id);
+    }
+    if (!id) {
       alert('Для участия нужен Telegram!');
       return;
     }
     try {
-      await checkPending(telegramId);
+      await checkPending(id);
       setShowParticipateModal(true); // Открыть модалку для ввода имени
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Ошибка при проверке участия';
