@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { getParticipants, getPrizepool, checkPending, getPending, getWinners } from '../lib/api';
+import { getParticipants, getPrizepool, getPending, getWinners } from '../lib/api';
 import TimerDisplay from '../components/TimerDisplay';
 import FortuneWheel from '../components/FortuneWheel';
 import ParticipantList from '../components/ParticipantList';
@@ -20,7 +20,6 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [instrOpen, setInstrOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [duplicateMessage, setDuplicateMessage] = useState<string>('');
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState(false);
@@ -100,24 +99,8 @@ export default function Home() {
   }, [telegramId]);
 
   const handleParticipate = async () => {
-    let id = telegramId;
-    // Получаем telegramId непосредственно при нажатии
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-      id = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-      setTelegramId(id);
-    }
-    if (!id) {
-      alert('Для участия нужен Telegram!');
-      return;
-    }
-    try {
-      await checkPending(id);
-      setShowParticipateModal(true); // Открыть модалку для ввода имени и оплаты
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Ошибка при проверке участия';
-      setDuplicateMessage(msg);
-      setShowDuplicateModal(true);
-    }
+    // Убираем проверку telegramId, всегда открываем модалку
+    setShowParticipateModal(true);
   };
 
   // Таймер для автозапуска (ровно в 20:00)
@@ -220,7 +203,6 @@ export default function Home() {
       </div>
       <DuplicateModal
         isOpen={showDuplicateModal}
-        message={duplicateMessage}
         onClose={() => setShowDuplicateModal(false)}
       />
     </div>
