@@ -203,6 +203,7 @@ export default function Home() {
       </div>
       <DuplicateModal
         isOpen={showDuplicateModal}
+        message={''}
         onClose={() => setShowDuplicateModal(false)}
       />
     </div>
