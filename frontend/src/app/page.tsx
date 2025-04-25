@@ -10,6 +10,7 @@ import InstructionModal from '../components/InstructionModal';
 import HistoryModal from '../components/HistoryModal';
 import DuplicateModal from '../components/DuplicateModal';
 import SplashScreen from '../components/SplashScreen';
+import ParticipateModalNew from '../components/ParticipateModalNew';
 
 export default function Home() {
   const [participants, setParticipants] = useState<string[]>([]);
@@ -25,6 +26,7 @@ export default function Home() {
   const [selecting, setSelecting] = useState(false);
   const [winnerName, setWinnerName] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
+  const [showParticipateModal, setShowParticipateModal] = useState(false);
 
   // Функция для обновления данных
   const reload = async () => {
@@ -71,19 +73,12 @@ export default function Home() {
 
   const handleParticipate = async () => {
     if (!telegramId) {
+      alert('Для участия нужен Telegram!');
       return;
     }
-
-    // Сохраняем telegramId для дальнейшей логики
-    console.log('Сохраняем telegramId пользователя:', telegramId);
-
-    // Если пользователь - админ, сразу открываем модальное окно без проверки
-    if (telegramId === process.env.NEXT_PUBLIC_ADMIN_ID || telegramId === '123456789') { // Используем переменную окружения или тестовый ID
-      return;
-    }
-
     try {
       await checkPending(telegramId);
+      setShowParticipateModal(true); // Открыть модалку для ввода имени
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Ошибка при проверке участия';
       setDuplicateMessage(msg);
@@ -153,8 +148,8 @@ export default function Home() {
         <div className="w-full flex flex-col space-y-1 mt-0 mb-0.5">
           <button
             onClick={handleParticipate}
-            className="participate-btn w-full py-1.5 sm:py-2 text-xs sm:text-sm bg-yellow-400 text-white font-bold hover:bg-yellow-300 transition-all duration-150"
-            style={{ borderRadius: '4px', maxWidth: 180, margin: '0 auto 8px auto' }}
+            className="participate-btn w-full py-3 sm:py-4 text-xs sm:text-sm bg-yellow-400 text-white font-bold hover:bg-yellow-300 transition-all duration-150"
+            style={{ borderRadius: '4px', maxWidth: 220, margin: '8px auto 4px auto' }}
           >
             Участвовать
           </button>
@@ -165,6 +160,12 @@ export default function Home() {
             />
           </div>
         </div>
+        <ParticipateModalNew
+          isOpen={showParticipateModal}
+          onCloseAction={() => setShowParticipateModal(false)}
+          onSuccessAction={() => { setShowParticipateModal(false); reload(); }}
+          telegramId={telegramId}
+        />
       </div>
       <DuplicateModal
         isOpen={showDuplicateModal}
