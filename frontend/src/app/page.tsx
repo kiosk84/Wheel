@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { getResetState, getWinners } from '../lib/api';
+import { getParticipants, getPending, getPrizepool, getWinners, postTimer, spinWheel } from '../lib/api';
 import TimerDisplay from '../components/TimerDisplay';
 import FortuneWheel from '../components/FortuneWheel';
 import ParticipantList from '../components/ParticipantList';
@@ -39,13 +39,17 @@ export default function Home() {
   //   }
   // }, []);
 
-  // Функция для обновления данных через reset API
+  // Функция для обновления данных (отдельные запросы)
   const reload = async () => {
     try {
-      const state = await getResetState();
-      setParticipants(state.participants);
-      setPendingUsers(state.pending.map((item: { name: string }) => item.name));
-      setPrizePool(state.prizepool);
+      const [participants, pending, prize] = await Promise.all([
+        getParticipants(),
+        getPending(),
+        getPrizepool()
+      ]);
+      setParticipants(participants);
+      setPendingUsers(pending.map((item) => item.name));
+      setPrizePool(prize.total);
     } catch (error) {
       console.error('Ошибка при обновлении данных:', error);
     }
@@ -89,8 +93,34 @@ export default function Home() {
     return () => { if (interval) clearInterval(interval); };
   }, [telegramId]);
 
+  // Получение telegramId из разных источников
+  const getTelegramId = () => {
+    if (typeof window === 'undefined') return '';
+    // 1. Telegram WebApp
+    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (tgUser?.id) return tgUser.id.toString();
+    // 2. localStorage
+    const stored = localStorage.getItem('telegramId');
+    if (stored) return stored;
+    // 3. sessionStorage
+    const session = sessionStorage.getItem('telegramId');
+    if (session) return session;
+    // 4. URL
+    const params = new URLSearchParams(window.location.search);
+    const tidParam = params.get('telegramId');
+    if (tidParam) return tidParam;
+    return '';
+  };
+
+  // Обновлённая функция участия
   const handleParticipate = async () => {
-    // Убираем проверку telegramId, всегда открываем модалку
+    const id = getTelegramId();
+    if (!id) {
+      alert('Не удалось получить ваш Telegram ID. Пожалуйста, откройте приложение через Telegram-бота.');
+      return;
+    }
+    setTelegramId(id);
+    localStorage.setItem('telegramId', id);
     setShowParticipateModal(true);
   };
 
@@ -129,6 +159,25 @@ export default function Home() {
     reload();
   };
 
+  // Временный обработчик для администратора: установить таймер на 5 минут и выбрать победителя
+  const handleAdminTestAction = async () => {
+    try {
+      // Установить таймер на 5 минут от текущего времени
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 5);
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const time = `${hh}:${mm}`;
+      await postTimer(time);
+      // Сразу запустить спин (выбор победителя)
+      await spinWheel();
+      alert('Таймер установлен на 5 минут и выбран победитель (см. историю)');
+      reload();
+    } catch (e) {
+      alert('Ошибка при тестовом запуске: ' + (e instanceof Error ? e.message : e));
+    }
+  };
+
   if (loading) return <SplashScreen />;
   // if (notInTelegram) {
   //   return (
@@ -148,18 +197,20 @@ export default function Home() {
   //   );
   // }
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-0 flex flex-col">
+    <div className="relative min-h-screen flex flex-col">
       <Navbar onMenuToggleAction={() => setSidebarOpen(true)} />
       <Sidebar
         isOpen={sidebarOpen}
         onShowInstructionsAction={() => { setInstrOpen(true); setSidebarOpen(false); }}
         onShowHistoryAction={() => { setHistoryOpen(true); setSidebarOpen(false); }}
         onCloseAction={() => setSidebarOpen(false)}
+        onAdminTestAction={handleAdminTestAction}
       />
       <InstructionModal isOpen={instrOpen} onClose={() => setInstrOpen(false)} />
       <HistoryModal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
-      <div className="flex-1 flex flex-col items-center justify-evenly px-2 sm:px-4 pt-2 sm:pt-3 pb-0 min-h-0 max-w-screen-sm mx-auto w-full">
-        <div className="mt-3 mb-0 sm:mb-0 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md p-2 sm:p-2 rounded-md text-center max-w-[320px] mx-auto">
+      <main className="flex-1 flex flex-col items-center justify-evenly px-2 sm:px-4 pt-20 pb-8 max-w-screen-sm mx-auto w-full">
+        {/* pt-20 для отступа под фиксированный header, pb-8 для отступа снизу */}
+        <div className="mt-3 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md p-2 rounded-md text-center max-w-[320px] mx-auto">
           <p className="text-white text-xs sm:text-sm mb-1">До следующего розыгрыша:</p>
           <TimerDisplay onTimerEnd={handleTimerEnd} />
           <div className="mt-0 text-center flex items-center justify-center gap-2 mb-0.5">
@@ -178,11 +229,13 @@ export default function Home() {
           >
             Участвовать
           </button>
-          <div className="bg-gray-800 p-3 sm:p-4 rounded-b-xl mt-1">
-            <ParticipantList
-              participants={participants}
-              pendingUsers={pendingUsers}
-            />
+          <div className="flex justify-center">
+            <div className="bg-gray-800/80 p-4 rounded-2xl shadow-2xl mt-4 mb-8 w-full max-w-md backdrop-blur-md">
+              <ParticipantList
+                participants={participants}
+                pendingUsers={pendingUsers}
+              />
+            </div>
           </div>
         </div>
         <ParticipateModalNew
@@ -191,7 +244,7 @@ export default function Home() {
           onSuccessAction={() => { setShowParticipateModal(false); reload(); }}
           telegramId={telegramId}
         />
-      </div>
+      </main>
       <DuplicateModal
         isOpen={showDuplicateModal}
         message={''}

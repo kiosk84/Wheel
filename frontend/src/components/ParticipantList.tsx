@@ -1,6 +1,5 @@
 "use client";
-import React, { useState } from 'react';
-import ParticipantsModal from './ParticipantsModal';
+import React from 'react';
 
 interface ParticipantListProps {
   participants: string[];
@@ -8,18 +7,16 @@ interface ParticipantListProps {
 }
 
 export default function ParticipantList({ participants, pendingUsers = [] }: ParticipantListProps) {
-  const [showModal, setShowModal] = useState(false);
   return (
-    <div className="text-white sticky bottom-0 z-30 bg-gray-900 bg-opacity-95 rounded-t-xl shadow-lg">
-      <div className="flex justify-between items-center mb-2 cursor-pointer select-none" onClick={() => setShowModal(true)}>
+    <div className="text-white w-full">
+      <div className="flex justify-between items-center mb-2">
         <h2 className="text-base sm:text-lg font-semibold gradient-text">Участники</h2>
         <span className="text-xs sm:text-sm bg-gray-700 px-2 py-1 rounded-full">
           {participants.length} {getParticipantWord(participants.length)}
         </span>
       </div>
-
       {participants.length > 0 ? (
-        <ul className="space-y-1 max-h-36 sm:max-h-48 overflow-y-auto pr-1">
+        <ul className="space-y-1 max-h-40 sm:max-h-56 overflow-y-auto pr-1">
           {participants.map((name, idx) => (
             <li key={idx} className="flex items-center px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors">
               <span className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center bg-gray-800 rounded-full mr-2 text-xs">
@@ -34,8 +31,6 @@ export default function ParticipantList({ participants, pendingUsers = [] }: Par
           Нет участников
         </div>
       )}
-
-      {/* Отображение ожидающих подтверждения */}
       {pendingUsers.length > 0 && (
         <div className="mt-3 sm:mt-4">
           <div className="flex justify-between items-center mb-1 sm:mb-2">
@@ -44,7 +39,7 @@ export default function ParticipantList({ participants, pendingUsers = [] }: Par
               {pendingUsers.length}
             </span>
           </div>
-          <ul className="space-y-1 max-h-20 sm:max-h-24 overflow-y-auto pr-1">
+          <ul className="space-y-1 max-h-16 sm:max-h-20 overflow-y-auto pr-1">
             {pendingUsers.map((name, idx) => (
               <li key={`pending-${idx}`} className="flex items-center px-2 sm:px-3 py-1 sm:py-2 bg-gray-700/50 rounded">
                 <span className="w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center bg-yellow-600/30 text-yellow-400 rounded-full mr-1.5 sm:mr-2 text-xs">
@@ -56,12 +51,10 @@ export default function ParticipantList({ participants, pendingUsers = [] }: Par
           </ul>
         </div>
       )}
-      <ParticipantsModal isOpen={showModal} onClose={() => setShowModal(false)} participants={participants} />
     </div>
   );
 }
 
-// Вспомогательная функция для правильного склонения слова "участник"
 function getParticipantWord(count: number): string {
   const lastDigit = count % 10;
   const lastTwoDigits = count % 100;
