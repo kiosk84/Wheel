@@ -83,14 +83,28 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Постоянно пытаемся получить telegramId из Telegram WebApp, пока не появится
+  useEffect(() => {
+    if (telegramId) return; // Уже есть id — не продолжаем
+    let interval: NodeJS.Timeout | undefined;
+    if (typeof window !== 'undefined') {
+      interval = setInterval(() => {
+        const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        if (user?.id) {
+          setTelegramId(user.id.toString());
+          if (interval) clearInterval(interval);
+        }
+      }, 500);
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [telegramId]);
+
   const handleParticipate = async () => {
-    // Всегда пробуем получить telegramId из Telegram WebApp при нажатии
-    let id = '';
+    let id = telegramId;
+    // Получаем telegramId непосредственно при нажатии
     if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
       id = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
       setTelegramId(id);
-    } else if (telegramId) {
-      id = telegramId;
     }
     if (!id) {
       alert('Для участия нужен Telegram!');
@@ -98,7 +112,7 @@ export default function Home() {
     }
     try {
       await checkPending(id);
-      setShowParticipateModal(true); // Открыть модалку для ввода имени
+      setShowParticipateModal(true); // Открыть модалку для ввода имени и оплаты
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Ошибка при проверке участия';
       setDuplicateMessage(msg);
