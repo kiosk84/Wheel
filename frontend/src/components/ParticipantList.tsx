@@ -1,5 +1,6 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
+import ParticipantsModal from './ParticipantsModal';
 
 interface ParticipantListProps {
   participants: string[];
@@ -7,9 +8,10 @@ interface ParticipantListProps {
 }
 
 export default function ParticipantList({ participants, pendingUsers = [] }: ParticipantListProps) {
+  const [showModal, setShowModal] = useState(false);
   return (
-    <div className="text-white">
-      <div className="flex justify-between items-center mb-2">
+    <div className="text-white sticky bottom-0 z-30 bg-gray-900 bg-opacity-95 rounded-t-xl shadow-lg">
+      <div className="flex justify-between items-center mb-2 cursor-pointer select-none" onClick={() => setShowModal(true)}>
         <h2 className="text-base sm:text-lg font-semibold gradient-text">Участники</h2>
         <span className="text-xs sm:text-sm bg-gray-700 px-2 py-1 rounded-full">
           {participants.length} {getParticipantWord(participants.length)}
@@ -54,6 +56,7 @@ export default function ParticipantList({ participants, pendingUsers = [] }: Par
           </ul>
         </div>
       )}
+      <ParticipantsModal isOpen={showModal} onClose={() => setShowModal(false)} participants={participants} />
     </div>
   );
 }

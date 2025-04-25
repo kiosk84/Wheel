@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { getParticipants, getPrizepool, getPending, getWinners } from '../lib/api';
+import { getResetState, getWinners } from '../lib/api';
 import TimerDisplay from '../components/TimerDisplay';
 import FortuneWheel from '../components/FortuneWheel';
 import ParticipantList from '../components/ParticipantList';
@@ -39,22 +39,13 @@ export default function Home() {
   //   }
   // }, []);
 
-  // Функция для обновления данных
+  // Функция для обновления данных через reset API
   const reload = async () => {
     try {
-      // Загружаем список участников (обычный и детальный)
-      const participantsData = await getParticipants();
-      setParticipants(participantsData);
-
-      // Загружаем список ожидающих подтверждения
-      const pendingData = await getPending();
-      const pendingNames = pendingData.map(item => item.name);
-      setPendingUsers(pendingNames);
-
-      // Загружаем призовой фонд
-      const prizepoolData = await getPrizepool();
-      setPrizePool(prizepoolData.total);
-
+      const state = await getResetState();
+      setParticipants(state.participants);
+      setPendingUsers(state.pending.map((item: { name: string }) => item.name));
+      setPrizePool(state.prizepool);
     } catch (error) {
       console.error('Ошибка при обновлении данных:', error);
     }
