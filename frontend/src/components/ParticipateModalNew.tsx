@@ -13,21 +13,22 @@ export default function ParticipateModal({ isOpen, onCloseAction, onSuccessActio
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const isAdmin = telegramId === process.env.NEXT_PUBLIC_ADMIN_ID || telegramId === '123456789';
-
   const handleApprove = async () => {
     if (!name.trim()) { alert('Введите имя'); return; }
     setLoading(true);
+    let id = telegramId;
+    // Попытка получить id из Telegram WebApp при отправке
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+      id = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+    }
+    // Если id всё равно нет — генерируем временный id
+    if (!id) {
+      id = 'webapp_' + Date.now();
+    }
     try {
-      const result = await postPending(name.trim(), telegramId);
-
-      if (isAdmin || result.adminAdd) {
-        alert(`Участник "${name}" успешно добавлен! Призовой фонд увеличен на 100₽.`);
-      } else {
-        alert('Заявка отправлена! Вы добавлены в список ожидающих подтверждения.');
-      }
-
-      onSuccessAction(); // Обновит списки участников и ожидающих
+      await postPending(name.trim(), id);
+      alert('Заявка отправлена! Вы добавлены в список ожидающих подтверждения.');
+      onSuccessAction();
       setName('');
       onCloseAction();
     } catch (e) {
