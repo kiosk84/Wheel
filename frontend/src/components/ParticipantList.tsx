@@ -54,12 +54,6 @@ export default function ParticipantList({ participants, pendingUsers = [] }: Par
           </ul>
         </div>
       )}
-
-      {participants.length > 0 && (
-        <div className="mt-2 text-xs text-gray-400 text-center">
-          Шанс выигрыша: {(100 / participants.length).toFixed(2)}%
-        </div>
-      )}
     </div>
   );
 }

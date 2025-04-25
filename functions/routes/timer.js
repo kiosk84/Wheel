@@ -2,23 +2,26 @@ const express = require('express');
 const router = express.Router();
 
 // Время автоспина в формате HH:MM
-let scheduledTime = '20:00';
+let scheduledTime = '15:00';
 
 // GET /timer - Calculate and return seconds remaining
 router.get('/', (req, res) => {
   try {
     const [hours, minutes] = scheduledTime.split(':').map(Number);
+    // Получаем текущее время в Екатеринбурге (UTC+5)
     const now = new Date();
+    // Получаем текущее время в UTC+5
+    const yekatNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Yekaterinburg' }));
 
-    let nextSpin = new Date();
-    nextSpin.setHours(hours, minutes, 0, 0); // Set target time for today
+    let nextSpin = new Date(yekatNow);
+    nextSpin.setHours(hours, minutes, 0, 0); // Set target time for today (в Екатеринбурге)
 
     // If target time has already passed today, set it for tomorrow
-    if (now.getTime() > nextSpin.getTime()) {
+    if (yekatNow.getTime() > nextSpin.getTime()) {
       nextSpin.setDate(nextSpin.getDate() + 1);
     }
 
-    const secondsRemaining = Math.max(0, Math.floor((nextSpin.getTime() - now.getTime()) / 1000));
+    const secondsRemaining = Math.max(0, Math.floor((nextSpin.getTime() - yekatNow.getTime()) / 1000));
 
     res.json({ secondsRemaining: secondsRemaining });
   } catch (error) {
