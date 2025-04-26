@@ -7,9 +7,10 @@ interface SidebarProps {
   onShowHistoryAction: () => void;
   onCloseAction: () => void;
   onAdminTestAction?: () => void; // Добавлен новый проп
+  onClearAllAction?: () => void;
 }
 
-export default function Sidebar({ isOpen, onShowInstructionsAction, onShowHistoryAction, onCloseAction, onAdminTestAction }: SidebarProps) {
+export default function Sidebar({ isOpen, onShowInstructionsAction, onShowHistoryAction, onCloseAction, onAdminTestAction, onClearAllAction }: SidebarProps) {
   const style = {
     position: 'fixed' as const,
     top: 0,
@@ -44,6 +45,15 @@ export default function Sidebar({ isOpen, onShowInstructionsAction, onShowHistor
             className="w-full text-left px-2 py-2 hover:bg-yellow-700 rounded bg-yellow-500 text-white font-bold mt-4"
           >
             Тест: Таймер 5 минут и выбрать победителя
+          </button>
+        </li>
+        {/* Кнопка для полной очистки базы теперь доступна всем */}
+        <li>
+          <button
+            onClick={onClearAllAction}
+            className="w-full text-left px-2 py-2 hover:bg-red-700 rounded bg-red-500 text-white font-bold mt-4"
+          >
+            Очистить всю базу
           </button>
         </li>
       </ul>

@@ -1,36 +1,28 @@
+// Скрипт для добавления ожидающих участников в pending
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-// Path to your SQLite database file
-const dbPath = path.join(__dirname, '..', 'db', 'fortune.db');
+const dbPath = path.join(__dirname, '../db/fortune.db');
 const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) console.error('Failed to open DB:', err);
-  else console.log('Connected to DB at', dbPath);
+  if (err) console.error('Ошибка подключения к БД:', err);
+  else console.log('Подключено к БД:', dbPath);
 });
 
-// List of participants to seed
-const participants = [
-  { name: 'Alice', telegramId: 'alice1' },
-  { name: 'Bob', telegramId: 'bob42' },
-  { name: 'Charlie', telegramId: 'charlie99' },
-  // add more here or load from external source
+const pendingUsers = [
+  { name: 'Иван', telegramId: '10001' },
+  { name: 'Мария', telegramId: '10002' },
+  { name: 'Алексей', telegramId: '10003' }
 ];
 
-// Insert participants with INSERT OR IGNORE
 db.serialize(() => {
-  const stmt = db.prepare(
-    'INSERT OR IGNORE INTO participants (name, telegramId) VALUES (?, ?);'
-  );
-
-  for (const p of participants) {
-    stmt.run(p.name, p.telegramId, (err) => {
-      if (err) console.error('Error inserting', p, err);
-      else console.log('Seeded', p.name);
+  pendingUsers.forEach(({ name, telegramId }) => {
+    db.run('INSERT INTO pending (name, telegramId) VALUES (?, ?)', [name, telegramId], (err) => {
+      if (err) console.error(`Ошибка добавления ${name}:`, err);
+      else console.log(`Добавлен ожидающий: ${name}`);
     });
-  }
-
-  stmt.finalize(() => {
-    console.log('Seeding complete.');
-    db.close();
   });
+});
+
+db.close(() => {
+  console.log('Добавление ожидающих завершено.');
 });

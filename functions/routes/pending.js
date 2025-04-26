@@ -127,4 +127,19 @@ router.post('/', (req, res) => {
   });
 });
 
+// Полная очистка базы: pending, participants, prize_pool
+router.post('/clear-all', (req, res) => {
+  db.serialize(() => {
+    db.run('DELETE FROM pending');
+    db.run('DELETE FROM participants');
+    db.run('UPDATE prize_pool SET amount = 0 WHERE id = 1');
+    res.json({ success: true, message: 'База полностью очищена.' });
+  });
+});
+
 module.exports = router;
+
+// --- ДОБАВИТЬ: уведомление участнику при подтверждении ---
+// Найдите обработку callback_data approve_... (обычно в bot/index.js или аналогичном)
+// После успешного добавления в participants:
+//   await sendTelegramMessage(telegramId, 'Ваша заявка подтверждена! Вы участвуете в розыгрыше.');

@@ -114,14 +114,17 @@ export default function Home() {
 
   // Обновлённая функция участия
   const handleParticipate = async () => {
-    const id = getTelegramId();
+    console.log('handleParticipate called'); // ОТЛАДКА
+    let id = getTelegramId();
     if (!id) {
-      // Удалено: больше не показываем сообщение о невозможности получить Telegram ID
-      return;
+      // Для локальной отладки генерируем временный id
+      id = 'test_' + Date.now();
+      console.log('Сгенерирован временный telegramId:', id);
     }
     setTelegramId(id);
     localStorage.setItem('telegramId', id);
     setShowParticipateModal(true);
+    console.log('setShowParticipateModal(true) вызван, telegramId:', id); // ОТЛАДКА
   };
 
   // Таймер для автозапуска (ровно в 20:00)
@@ -178,6 +181,24 @@ export default function Home() {
     }
   };
 
+  // --- Очистка всей базы (только для админа) ---
+  const handleClearAll = async () => {
+    if (!window.confirm('Вы уверены, что хотите полностью очистить базу? Это действие необратимо!')) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/pending/clear-all`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert('База полностью очищена!');
+        reload();
+      } else {
+        alert('Ошибка при очистке базы: ' + (data.message || ''));
+      }
+    } catch (e) {
+      alert('Ошибка при очистке базы: ' + (e instanceof Error ? e.message : e));
+    }
+  };
+
   if (loading) return <SplashScreen />;
   // if (notInTelegram) {
   //   return (
@@ -205,6 +226,7 @@ export default function Home() {
         onShowHistoryAction={() => { setHistoryOpen(true); setSidebarOpen(false); }}
         onCloseAction={() => setSidebarOpen(false)}
         onAdminTestAction={handleAdminTestAction}
+        onClearAllAction={handleClearAll}
       />
       <InstructionModal isOpen={instrOpen} onClose={() => setInstrOpen(false)} />
       <HistoryModal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
@@ -215,11 +237,10 @@ export default function Home() {
           <TimerDisplay onTimerEnd={handleTimerEnd} />
           <div className="mt-0 text-center flex items-center justify-center gap-2 mb-0.5">
             <p className="text-[#229ED9] text-xs sm:text-sm font-bold">Призовой фонд:</p>
-            <p className="text-[#229ED9] text-lg sm:text-xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
+            <p className="text-green-400 text-lg sm:text-xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
           </div>
         </div>
         <div className="flex flex-col items-center justify-center w-full my-[8px]">
-          {/* <h2 className="text-white text-xl sm:text-2xl font-bold mb-2">Колесо Фортуны</h2> */}
           <FortuneWheel participants={participants} selecting={selecting} winnerName={winnerName} onFinish={handleSpinFinish} />
         </div>
         <div className="w-full flex flex-col space-y-1 mt-0 mb-0.5">
