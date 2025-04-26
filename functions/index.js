@@ -366,6 +366,7 @@ app.use('/winners', winnersRoute);
 app.use('/prizepool', prizepoolRoute);
 app.use('/spin', spinRoute);
 app.use('/timer', timerRoute);
+app.use('/start-ids', require('./routes/start-ids'));
 
 // API routes defined directly in this file (Kept from original functions/index.js)
 // Frontend notification API

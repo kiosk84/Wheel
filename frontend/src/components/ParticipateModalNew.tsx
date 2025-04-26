@@ -38,6 +38,20 @@ export default function ParticipateModal({ isOpen, onCloseAction, onSuccessActio
     }
   };
 
+  const handlePayment = async () => {
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/start-ids/paid-users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId, name }),
+      });
+      onSuccessAction();
+    } catch (e) {
+      console.error('Ошибка при сохранении оплаты:', e);
+      alert('Не удалось сохранить оплату. Попробуйте снова.');
+    }
+  };
+
   if (!isOpen) return null;
   return (
     <>

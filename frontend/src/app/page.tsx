@@ -12,6 +12,24 @@ import DuplicateModal from '../components/DuplicateModal';
 import SplashScreen from '../components/SplashScreen';
 import ParticipateModalNew from '../components/ParticipateModalNew';
 
+function StartScreen({ onStart, telegramId }: { onStart: (id: string) => void, telegramId: string }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#181A20] text-white">
+      <h1 className="text-2xl font-bold mb-6">Колесо Фортуны</h1>
+      <p className="mb-4 text-sm">Добро пожаловать! Для продолжения нажмите кнопку ниже.</p>
+      <button
+        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl text-lg shadow-lg"
+        onClick={() => onStart(telegramId)}
+      >
+        Старт
+      </button>
+      <div className="mt-6 text-xs text-gray-400 select-all">
+        Ваш Telegram ID: <span className="font-mono text-blue-400">{telegramId || 'не определён'}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [participants, setParticipants] = useState<string[]>([]);
   const [pendingUsers, setPendingUsers] = useState<string[]>([]);
@@ -26,6 +44,7 @@ export default function Home() {
   const [spinning, setSpinning] = useState(false);
   const [showParticipateModal, setShowParticipateModal] = useState(false);
   const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null);
+  const [showStartScreen, setShowStartScreen] = useState(true);
 
   // Проверка, открыт ли WebApp в Telegram
   // const [notInTelegram, setNotInTelegram] = useState(false);
@@ -98,27 +117,49 @@ export default function Home() {
     if (typeof window === 'undefined') return '';
     // 1. Telegram WebApp
     const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    if (tgUser?.id) return tgUser.id.toString();
+    if (tgUser?.id) {
+      console.log('[TG] user.id найден:', tgUser.id);
+      return tgUser.id.toString();
+    }
     // 2. localStorage
     const stored = localStorage.getItem('telegramId');
-    if (stored) return stored;
+    if (stored) {
+      console.log('[TG] id из localStorage:', stored);
+      return stored;
+    }
     // 3. sessionStorage
     const session = sessionStorage.getItem('telegramId');
-    if (session) return session;
+    if (session) {
+      console.log('[TG] id из sessionStorage:', session);
+      return session;
+    }
     // 4. URL
     const params = new URLSearchParams(window.location.search);
     const tidParam = params.get('telegramId');
-    if (tidParam) return tidParam;
+    if (tidParam) {
+      console.log('[TG] id из URL:', tidParam);
+      return tidParam;
+    }
+    console.warn('[TG] Не удалось получить Telegram ID!');
     return '';
   };
 
   // Обновлённая функция участия
   const handleParticipate = async () => {
     const id = getTelegramId();
+    console.log('[handleParticipate] Используемый id:', id);
     const tgUser = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initDataUnsafe?.user : null;
     const tgInitData = typeof window !== 'undefined' ? (window.Telegram?.WebApp?.initDataUnsafe as Record<string, unknown>) : null;
     const hash = tgInitData?.hash;
     const auth_date = tgInitData?.auth_date;
+
+    // Если нет реального Telegram ID (и это не админ), показываем сообщение и не даём участвовать
+    if (!id || /^test_/.test(id)) {
+      if (id !== process.env.NEXT_PUBLIC_ADMIN_ID && id !== process.env.ADMIN_ID) {
+        setDuplicateMessage('Пожалуйста, откройте приложение через Telegram для участия в розыгрыше.');
+        return;
+      }
+    }
 
     // Отправляем данные в /telegram-auth если есть id и hash
     if (id && hash && auth_date) {
@@ -153,6 +194,17 @@ export default function Home() {
       setShowParticipateModal(true);
     } catch (e) {
       setDuplicateMessage(e instanceof Error ? e.message : 'Вы уже участвуете или ожидаете подтверждения');
+    }
+
+    // После успешной проверки и перед открытием модалки участия — фиксируем этап "решил участвовать"
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/start-ids/participating-users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: id }),
+      });
+    } catch (e) {
+      console.warn('Не удалось сохранить этап "решил участвовать":', e);
     }
   };
 
@@ -228,24 +280,26 @@ export default function Home() {
     }
   };
 
+  // Новый обработчик для кнопки Старт
+  const handleStart = async (id: string) => {
+    // Сохраняем id в отдельный список стартовых пользователей через API
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/start-ids`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: id }),
+      });
+    } catch (e) {
+      // Не блокируем, если не удалось сохранить
+      console.warn('Не удалось сохранить стартовый Telegram ID:', e);
+    }
+    setShowStartScreen(false);
+  };
+
   if (loading) return <SplashScreen />;
-  // if (notInTelegram) {
-  //   return (
-  //     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-4">
-  //       <div className="bg-gray-800 rounded-xl p-6 max-w-xs w-full text-center shadow-lg">
-  //         <h2 className="text-lg font-bold mb-3">Вход только через Telegram</h2>
-  //         <p className="mb-4 text-sm">Пожалуйста, откройте это приложение через Telegram-бота, чтобы участвовать в розыгрыше.</p>
-  //         <a
-  //           href="https://t.me/your_bot_username"
-  //           className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-5 py-3 text-base transition-colors duration-150 shadow-md w-full"
-  //           style={{ maxWidth: 320 }}
-  //         >
-  //           Открыть бота в Telegram
-  //         </a>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  if (showStartScreen) {
+    return <StartScreen onStart={handleStart} telegramId={telegramId} />;
+  }
   return (
     <div className="relative min-h-screen flex flex-col bg-[#181A20]">
       <Navbar onMenuToggleAction={() => setSidebarOpen(true)} />
@@ -267,6 +321,11 @@ export default function Home() {
             <p className="text-[#229ED9] text-xs sm:text-sm font-bold">Призовой фонд:</p>
             <p className="text-green-400 text-lg sm:text-xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
           </div>
+        </div>
+        {/* Отладочный вывод Telegram ID для пользователя */}
+        <div className="w-full text-center text-xs text-gray-400 mt-2 mb-1 select-all">
+          <span>Ваш Telegram ID: </span>
+          <span className="font-mono text-blue-400">{telegramId || 'не определён'}</span>
         </div>
         <div className="flex flex-col items-center justify-center w-full my-[8px]">
           <FortuneWheel participants={participants} selecting={selecting} winnerName={winnerName} onFinish={handleSpinFinish} />
