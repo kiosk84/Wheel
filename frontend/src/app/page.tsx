@@ -116,7 +116,7 @@ export default function Home() {
   const handleParticipate = async () => {
     const id = getTelegramId();
     if (!id) {
-      alert('Не удалось получить ваш Telegram ID. Пожалуйста, откройте приложение через Telegram-бота.');
+      // Удалено: больше не показываем сообщение о невозможности получить Telegram ID
       return;
     }
     setTelegramId(id);
@@ -197,7 +197,7 @@ export default function Home() {
   //   );
   // }
   return (
-    <div className="relative min-h-screen flex flex-col">
+    <div className="relative min-h-screen flex flex-col bg-[#181A20]">
       <Navbar onMenuToggleAction={() => setSidebarOpen(true)} />
       <Sidebar
         isOpen={sidebarOpen}
@@ -210,27 +210,28 @@ export default function Home() {
       <HistoryModal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
       <main className="flex-1 flex flex-col items-center justify-evenly px-2 sm:px-4 pt-20 pb-8 max-w-screen-sm mx-auto w-full">
         {/* pt-20 для отступа под фиксированный header, pb-8 для отступа снизу */}
-        <div className="mt-3 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md p-2 rounded-md text-center max-w-[320px] mx-auto">
-          <p className="text-white text-xs sm:text-sm mb-1">До следующего розыгрыша:</p>
+        <div className="mt-3 w-full bg-[#23262F] bg-opacity-90 backdrop-blur-md p-2 rounded-xl text-center max-w-[320px] mx-auto shadow-md border border-[#222]">
+          <p className="text-[#229ED9] text-xs sm:text-sm mb-1 font-semibold">До следующего розыгрыша:</p>
           <TimerDisplay onTimerEnd={handleTimerEnd} />
           <div className="mt-0 text-center flex items-center justify-center gap-2 mb-0.5">
-            <p className="text-white text-xs sm:text-sm font-bold">Призовой фонд:</p>
-            <p className="text-green-400 text-lg sm:text-xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
+            <p className="text-[#229ED9] text-xs sm:text-sm font-bold">Призовой фонд:</p>
+            <p className="text-[#229ED9] text-lg sm:text-xl font-bold">{prizePool > 0 ? prizePool : 0}₽</p>
           </div>
         </div>
-        <div className="flex items-center justify-center w-full my-0">
+        <div className="flex flex-col items-center justify-center w-full my-[8px]">
+          {/* <h2 className="text-white text-xl sm:text-2xl font-bold mb-2">Колесо Фортуны</h2> */}
           <FortuneWheel participants={participants} selecting={selecting} winnerName={winnerName} onFinish={handleSpinFinish} />
         </div>
         <div className="w-full flex flex-col space-y-1 mt-0 mb-0.5">
           <button
             onClick={handleParticipate}
-            className="participate-btn w-full py-3 sm:py-4 text-xs sm:text-sm bg-yellow-400 text-white font-bold hover:bg-yellow-300 transition-all duration-150"
-            style={{ borderRadius: '4px', maxWidth: 220, margin: '8px auto 4px auto' }}
+            className="participate-btn w-full py-3 sm:py-4 text-xs sm:text-sm bg-[#229ED9] text-white font-bold hover:bg-[#1b7eb3] transition-all duration-150 shadow rounded-xl"
+            style={{ maxWidth: 220, margin: '8px auto 4px auto' }}
           >
             Участвовать
           </button>
           <div className="flex justify-center">
-            <div className="bg-gray-800/80 p-4 rounded-2xl shadow-2xl mt-4 mb-8 w-full max-w-md backdrop-blur-md">
+            <div className="bg-[#23262F] p-4 rounded-2xl shadow-xl mt-4 mb-8 w-full max-w-md backdrop-blur-md border border-[#222]">
               <ParticipantList
                 participants={participants}
                 pendingUsers={pendingUsers}
@@ -247,8 +248,8 @@ export default function Home() {
       </main>
       <DuplicateModal
         isOpen={showDuplicateModal}
-        message={''}
         onClose={() => setShowDuplicateModal(false)}
+        message="Такой участник уже есть в списке!"
       />
     </div>
   );

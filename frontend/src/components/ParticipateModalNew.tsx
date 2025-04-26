@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { postPending } from '../lib/api';
+import Script from 'next/script';
 
 interface ParticipateModalProps {
   isOpen: boolean;
@@ -40,6 +41,16 @@ export default function ParticipateModal({ isOpen, onCloseAction, onSuccessActio
   if (!isOpen) return null;
   return (
     <>
+      {/* Telegram Login Widget */}
+      <Script
+        src="https://telegram.org/js/telegram-widget.js?22"
+        strategy="afterInteractive"
+        data-telegram-login="YourBotName" // Замените на имя вашего бота
+        data-size="large"
+        data-auth-url="/api/telegram-auth" // API-роут для обработки авторизации
+        data-request-access="write"
+      />
+
       <div className="fixed inset-0 flex items-center justify-center modal px-3 sm:px-4 z-50">
         <div className="bg-gray-800 p-4 sm:p-6 md:p-8 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
           <h3 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-white text-center">Участие в розыгрыше</h3>
