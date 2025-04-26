@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { getParticipants, getPending, getPrizepool, getWinners, postTimer, spinWheel } from '../lib/api';
+import { getParticipants, getPending, getPrizepool, getWinners, postTimer, spinWheel, checkPending } from '../lib/api';
 import TimerDisplay from '../components/TimerDisplay';
 import FortuneWheel from '../components/FortuneWheel';
 import ParticipantList from '../components/ParticipantList';
@@ -20,12 +20,12 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [instrOpen, setInstrOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState(false);
   const [winnerName, setWinnerName] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
   const [showParticipateModal, setShowParticipateModal] = useState(false);
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null);
 
   // Проверка, открыт ли WebApp в Telegram
   // const [notInTelegram, setNotInTelegram] = useState(false);
@@ -114,17 +114,20 @@ export default function Home() {
 
   // Обновлённая функция участия
   const handleParticipate = async () => {
-    console.log('handleParticipate called'); // ОТЛАДКА
     let id = getTelegramId();
     if (!id) {
-      // Для локальной отладки генерируем временный id
       id = 'test_' + Date.now();
-      console.log('Сгенерирован временный telegramId:', id);
     }
     setTelegramId(id);
     localStorage.setItem('telegramId', id);
-    setShowParticipateModal(true);
-    console.log('setShowParticipateModal(true) вызван, telegramId:', id); // ОТЛАДКА
+    try {
+      // Проверяем, не участвует ли уже пользователь (проверка до открытия модалки)
+      await checkPending(id);
+      setShowParticipateModal(true);
+    } catch (e) {
+      // Если уже участвует или ожидает подтверждения — показываем DuplicateModal
+      setDuplicateMessage(e instanceof Error ? e.message : 'Вы уже участвуете или ожидаете подтверждения');
+    }
   };
 
   // Таймер для автозапуска (ровно в 20:00)
@@ -268,9 +271,9 @@ export default function Home() {
         />
       </main>
       <DuplicateModal
-        isOpen={showDuplicateModal}
-        onClose={() => setShowDuplicateModal(false)}
-        message="Такой участник уже есть в списке!"
+        isOpen={!!duplicateMessage}
+        onClose={() => setDuplicateMessage(null)}
+        message={duplicateMessage || ''}
       />
     </div>
   );

@@ -37,18 +37,14 @@ router.post('/', (req, res) => {
   const { name, telegramId } = req.body;
   // Admin fast-add: bypass pending, insert directly into participants
   if (telegramId === ADMIN_ID) {
-    // Check duplicate name
-    db.get('SELECT 1 FROM participants WHERE name = ?', [name], (err, row) => {
-      if (err) return res.status(500).json({ error: 'Database error' });
-      if (row) return res.status(409).json({ error: 'Участник с таким именем уже есть.' });
-      const newId = `admin_${Date.now()}`;
-      db.run('INSERT INTO participants (name, telegramId) VALUES (?, ?)', [name, newId], (err2) => {
-        if (err2) return res.status(500).json({ error: 'DB error' });
-        // Increment prize pool
-        db.run('UPDATE prize_pool SET amount = amount + 100 WHERE id = 1', (err3) => {
-          if (err3) console.error('Prize pool update error:', err3);
-          return res.json({ success: true, admin: true });
-        });
+    // Для админа убираем любые лимиты — всегда добавляем новую запись
+    const newId = `admin_${Date.now()}`;
+    db.run('INSERT INTO participants (name, telegramId) VALUES (?, ?)', [name, newId], (err2) => {
+      if (err2) return res.status(500).json({ error: 'DB error' });
+      // Increment prize pool
+      db.run('UPDATE prize_pool SET amount = amount + 100 WHERE id = 1', (err3) => {
+        if (err3) console.error('Prize pool update error:', err3);
+        return res.json({ success: true, admin: true });
       });
     });
     return;
