@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { getParticipants, getPending, getPrizepool, getWinners, postTimer, spinWheel, checkPending } from '../lib/api';
+import { getParticipants, getPending, getPrizepool, getWinners, checkPending } from '../lib/api';
 import TimerDisplay from '../components/TimerDisplay';
 import FortuneWheel from '../components/FortuneWheel';
 import ParticipantList from '../components/ParticipantList';
@@ -114,18 +114,44 @@ export default function Home() {
 
   // Обновлённая функция участия
   const handleParticipate = async () => {
-    let id = getTelegramId();
-    if (!id) {
-      id = 'test_' + Date.now();
+    const id = getTelegramId();
+    const tgUser = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initDataUnsafe?.user : null;
+    const tgInitData = typeof window !== 'undefined' ? (window.Telegram?.WebApp?.initDataUnsafe as Record<string, unknown>) : null;
+    const hash = tgInitData?.hash;
+    const auth_date = tgInitData?.auth_date;
+
+    // Отправляем данные в /telegram-auth если есть id и hash
+    if (id && hash && auth_date) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/telegram-auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            first_name: tgUser?.first_name,
+            username: tgUser?.username,
+            hash,
+            auth_date,
+          }),
+        });
+      } catch (e) {
+        // Не блокируем участие, если временная база недоступна
+        console.warn('Не удалось сохранить Telegram ID во временную базу:', e);
+      }
+    }
+    // Для админа всегда разрешаем участие без проверки
+    if (id === process.env.NEXT_PUBLIC_ADMIN_ID || id === process.env.ADMIN_ID) {
+      setTelegramId(id);
+      localStorage.setItem('telegramId', id);
+      setShowParticipateModal(true);
+      return;
     }
     setTelegramId(id);
     localStorage.setItem('telegramId', id);
     try {
-      // Проверяем, не участвует ли уже пользователь (проверка до открытия модалки)
       await checkPending(id);
       setShowParticipateModal(true);
     } catch (e) {
-      // Если уже участвует или ожидает подтверждения — показываем DuplicateModal
       setDuplicateMessage(e instanceof Error ? e.message : 'Вы уже участвуете или ожидаете подтверждения');
     }
   };
@@ -166,23 +192,23 @@ export default function Home() {
   };
 
   // Временный обработчик для администратора: установить таймер на 5 минут и выбрать победителя
-  const handleAdminTestAction = async () => {
-    try {
-      // Установить таймер на 5 минут от текущего времени
-      const now = new Date();
-      now.setMinutes(now.getMinutes() + 5);
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mm = String(now.getMinutes()).padStart(2, '0');
-      const time = `${hh}:${mm}`;
-      await postTimer(time);
-      // Сразу запустить спин (выбор победителя)
-      await spinWheel();
-      alert('Таймер установлен на 5 минут и выбран победитель (см. историю)');
-      reload();
-    } catch (e) {
-      alert('Ошибка при тестовом запуске: ' + (e instanceof Error ? e.message : e));
-    }
-  };
+  // const handleAdminTestAction = async () => {
+  //   try {
+  //     // Установить таймер на 5 минут от текущего времени
+  //     const now = new Date();
+  //     now.setMinutes(now.getMinutes() + 5);
+  //     const hh = String(now.getHours()).padStart(2, '0');
+  //     const mm = String(now.getMinutes()).padStart(2, '0');
+  //     const time = `${hh}:${mm}`;
+  //     await postTimer(time);
+  //     // Сразу запустить спин (выбор победителя)
+  //     await spinWheel();
+  //     alert('Таймер установлен на 5 минут и выбран победитель (см. историю)');
+  //     reload();
+  //   } catch (e) {
+  //     alert('Ошибка при тестовом запуске: ' + (e instanceof Error ? e.message : e));
+  //   }
+  // };
 
   // --- Очистка всей базы (только для админа) ---
   const handleClearAll = async () => {
@@ -228,7 +254,6 @@ export default function Home() {
         onShowInstructionsAction={() => { setInstrOpen(true); setSidebarOpen(false); }}
         onShowHistoryAction={() => { setHistoryOpen(true); setSidebarOpen(false); }}
         onCloseAction={() => setSidebarOpen(false)}
-        onAdminTestAction={handleAdminTestAction}
         onClearAllAction={handleClearAll}
       />
       <InstructionModal isOpen={instrOpen} onClose={() => setInstrOpen(false)} />

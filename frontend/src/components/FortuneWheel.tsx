@@ -182,7 +182,7 @@ const FortuneWheel: React.FC<FortuneWheelProps> = ({ participants, selecting = f
           </linearGradient>
         </defs>
         <polygon
-          points={`${CENTER-12},${CENTER-WHEEL_RADIUS-8} ${CENTER+12},${CENTER-WHEEL_RADIUS-8} ${CENTER},${CENTER-WHEEL_RADIUS+18}`}
+          points={`${CENTER-12},${CENTER-WHEEL_RADIUS-16} ${CENTER+12},${CENTER-WHEEL_RADIUS-16} ${CENTER},${CENTER-WHEEL_RADIUS+10}`}
           fill="url(#pointerGrad)"
           stroke="#fff"
           strokeWidth="2"

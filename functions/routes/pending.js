@@ -104,8 +104,9 @@ router.post('/', (req, res) => {
           // Уведомление админа через Telegram на русском
           bot.telegram.sendMessage(
             ADMIN_ID,
-            `Новая заявка на участие:\nИмя: ${name}\nTelegram ID: ${telegramId}`,
+            `🆕 <b>Новая заявка на участие</b>\n\n👤 <b>Имя:</b> ${name}\n🆔 <b>Telegram ID:</b> <code>${telegramId}</code>`,
             {
+              parse_mode: 'HTML',
               reply_markup: {
                 inline_keyboard: [
                   [
