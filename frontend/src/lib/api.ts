@@ -124,13 +124,3 @@ export async function checkPending(telegramId: string): Promise<void> {
     throw new Error(msg);
   }
 }
-
-export async function getResetState(): Promise<{
-  participants: string[];
-  pending: { name: string }[];
-  prizepool: number;
-}> {
-  const res = await fetch(`${API_URL}/reset`);
-  if (!res.ok) throw new Error('Failed to fetch reset state');
-  return res.json();
-}

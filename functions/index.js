@@ -360,6 +360,10 @@ bot.command('add', async (ctx) => {
   });
 });
 
+// Health check endpoint for Railway
+app.get('/', (req, res) => res.sendStatus(200));
+app.get('/healthz', (req, res) => res.send('OK'));
+
 // Mount API routes
 app.use('/participants', participantsRoute);
 app.use('/pending', pendingRoute);
