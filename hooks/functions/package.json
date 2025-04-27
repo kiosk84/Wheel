@@ -4,6 +4,7 @@
   "scripts": {
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
+    "build": "echo \"No build necessary\"",
     "start": "node index.js",
     "start:dev": "cross-env NODE_ENV=development node index.js",
     "deploy": "firebase deploy --only functions",
