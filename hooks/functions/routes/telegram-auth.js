@@ -25,7 +25,7 @@ module.exports = async function telegramAuth(req, res) {
     return;
   }
   const { id, first_name, username, hash, auth_date, ...other } = req.body;
-  const botToken = process.env.TELEGRAM_TOKEN;
+  const botToken = process.env.BOT_TOKEN; // use BOT_TOKEN for Telegram auth
   if (!botToken) {
     res.status(500).json({ error: 'Bot token not set' });
     return;
