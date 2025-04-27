@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Колесо Фортуны</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            font-family: 'Arial', sans-serif;
+        }
+        .wheel {
+            border: 4px solid #001f3f;
+            border-radius: 50%;
+            margin: 0 auto;
+        }
+        .firework-particle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: firework-burst 1.5s ease-out forwards;
+        }
+        @keyframes firework-burst {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+        .digital-timer {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+            background-color: #2d2d2d;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+        .gradient-text {
+            background: linear-gradient(90deg, #ffd700, #ff6b6b);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .modal {
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+        .sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        .sidebar-hidden {
+            transform: translateX(-100%);
+        }
+        .participate-btn {
+            background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+            box-shadow: 0 1px 4px rgba(59, 130, 246, 0.1);
+            position: relative;
+            overflow: hidden;
+            transition: background 0.3s, box-shadow 0.3s, transform 0.15s;
+            animation: pulse-btn 4s infinite ease-in-out;
+            padding: 0.5em 1em;
+        }
+        .participate-btn:hover:not(:disabled) {
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+            box-shadow: 0 8px 32px 0 rgba(59,130,246,0.35), 0 3px 12px 0 rgba(30,64,175,0.18);
+            transform: none;
+            animation: none;
+        }
+        @keyframes pulse-btn {
+            0% { transform: scale(1); box-shadow: 0 2px 10px 0 rgba(59, 130, 246, 0.18), 0 1px 3px 0 rgba(30, 64, 175, 0.09); }
+            50% { transform: scale(1.01); box-shadow: 0 0 6px rgba(59, 130, 246, 0.2); }
+            100% { transform: scale(1); box-shadow: 0 2px 10px 0 rgba(59, 130, 246, 0.18), 0 1px 3px 0 rgba(30, 64, 175, 0.09); }
+        }
+        .animate-bounce {
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        /* Winner overlay animation */
+        @keyframes overlay-pop {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .winner-overlay {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1100;
+            color: #00ffff;
+            text-align: center;
+        }
+        .winner-overlay h2, .winner-overlay p {
+            margin: 0.5em 0;
+            animation: overlay-pop 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <!-- Insert summary of key changes above script -->
+    <!--
+    Key Changes
+    Fixed showReviewModal ReferenceError: Added const [showReviewModal, setShowReviewModal] = useState(false);
+    Enhanced Timer Logic: Introduced spinTriggeredRef to prevent multiple spins; updated countdown effect.
+    Improved Error Handling: Console warnings for skip spin and user-friendly DuplicateModal messages.
+    Maintained Timer-Based Auto-Spin: Countdown triggers CustomWheel spin and displays WinnerModal with fireworks.
+    Fixed CSS and Modal Issues: Corrected sidebar class typo and ensured ReviewModal refreshes pending list.
+    Assumptions: Functional backend APIs and Telegram WebApp environment.
+    How to Test: See companion testing doc.
+    Limitations: CustomWheel basic visuals; depends on server-side reset logic.
+    -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const tg = window.Telegram?.WebApp;
+        const urlParams = new URLSearchParams(window.location.search);
+        const telegramId = tg?.initDataUnsafe?.user?.id || urlParams.get('telegramId');
+        const ADMIN_ID = '123456789';
+        const isAdmin = telegramId?.toString() === ADMIN_ID;
+        const BASE_URL = window.location.origin;
+
+        const CustomWheel = ({ data, onStopSpinning, mustStartSpinning, spinTime = 7 }) => {
+            const wheelRef = useRef();
+            useEffect(() => {
+                if (mustStartSpinning && data.length > 0) {
+                    const num = data.length;
+                    const seg = 360 / num;
+                    const idx = Math.floor(Math.random() * num);
+                    const offset = seg * idx + seg / 2;
+                    const rotation = 360 * 5 + (360 - offset);
+                    const wheel = wheelRef.current;
+                    // smooth deceleration easing
+                    wheel.style.transition = `transform ${spinTime}s cubic-bezier(0.33,1,0.68,1)`;
+                    wheel.style.transform = `rotate(${rotation}deg)`;
+                    const onEnd = () => {
+                        onStopSpinning(data[idx]);
+                        wheel.removeEventListener('transitionend', onEnd);
+                    };
+                    wheel.addEventListener('transitionend', onEnd);
+                }
+            }, [mustStartSpinning, data, spinTime, onStopSpinning]);
+            const seg = 360 / (data.length || 1);
+            // Generate distinct HSL colors for each segment
+            const grad = data.length > 0 ? data.map((item, i) => {
+                const hue = (360 / data.length) * i;
+                const color = item.color || `hsl(${hue}, 70%, 50%)`;
+                return `${color} ${i * seg}deg ${(i + 1) * seg}deg`;
+            }).join(',') : '#444 0deg 360deg';
+            return (
+                <div style={{ position: 'relative', width: '300px', height: '300px' }}>
+                    {/* Red marker triangle */}
+                    <div style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderBottom: '20px solid red', zIndex: 4 }} />
+                    {/* Line from marker to center */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '10px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: '2px',
+                        height: '140px',
+                        background: '#00ffff',
+                        boxShadow: '0 0 8px #00ffff',
+                        border: '1px solid #001f3f',
+                        zIndex: 3,
+                        borderRadius: '1px'
+                    }} />
+                    <div
+                        ref={wheelRef}
+                        className="wheel"
+                        style={{
+                            width: '300px', height: '300px',
+                            background: `conic-gradient(${grad})`,
+                            position: 'relative', zIndex: 2,
+                            boxShadow: '0 0 40px 12px rgba(0, 255, 255, 0.8)',
+                        }}
+                    >
+                        {/* Segment labels inside rotating wheel */}
+                        {data.length > 0 && data.map((item, i) => {
+                            const angle = (i * seg + seg / 2) * Math.PI / 180;
+                            return (
+                                <div key={i} style={{
+                                    position: 'absolute', top: '50%', left: '50%',
+                                    transform: `rotate(${angle}rad) translate(0, -140px)`,
+                                    transformOrigin: 'center center',
+                                    color: '#fff',
+                                    fontSize: '14px',
+                                    fontFamily: 'Arial Black, sans-serif',
+                                    fontWeight: 'bold',
+                                    WebkitTextStroke: '1px #000',
+                                    whiteSpace: 'nowrap', zIndex: 3,
+                                }}>
+                                    {item.option}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        const Fireworks = () => {
+            const [bursts, setBursts] = useState([]);
+            useEffect(() => {
+                const newBursts = [];
+                const burstCount = 3;
+                const particlesPerBurst = 20;
+                for (let b = 0; b < burstCount; b++) {
+                    const burstX = window.innerWidth / 2 + (Math.random() - 0.5) * 150;
+                    const burstY = window.innerHeight / 2 + (Math.random() - 0.5) * 150;
+                    const particles = [];
+                    for (let i = 0; i < particlesPerBurst; i++) {
+                        const angle = Math.random() * 2 * Math.PI;
+                        const speed = Math.random() * 4 + 2;
+                        const size = Math.random() * 6 + 3;
+                        const hue = Math.random() * 360;
+                        particles.push({
+                            id: `${b}-${i}`,
+                            x: burstX,
+                            y: burstY,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            size,
+                            color: `hsl(${hue}, 100%, 50%)`,
+                            opacity: 1,
+                        });
+                    }
+                    newBursts.push({ id: b, particles });
+                }
+                setBursts(newBursts);
+                const updateParticles = setInterval(() => {
+                    setBursts(prevBursts =>
+                        prevBursts.map(burst => ({
+                            ...burst,
+                            particles: burst.particles.map(p => ({
+                                ...p,
+                                x: p.x + p.vx,
+                                y: p.y + p.vy,
+                                opacity: p.opacity - 0.03,
+                                vy: p.vy + 0.04,
+                            })).filter(p => p.opacity > 0)
+                        })).filter(burst => burst.particles.length > 0)
+                    );
+                }, 1000 / 60);
+                const timeout = setTimeout(() => {
+                    clearInterval(updateParticles);
+                    setBursts([]);
+                }, 1500);
+                return () => {
+                    clearInterval(updateParticles);
+                    clearTimeout(timeout);
+                };
+            }, []);
+            return (
+                <>
+                    {bursts.map(burst =>
+                        burst.particles.map(particle => (
+                            <div
+                                key={particle.id}
+                                className="firework-particle"
+                                style={{
+                                    left: particle.x,
+                                    top: particle.y,
+                                    width: particle.size,
+                                    height: particle.size,
+                                    backgroundColor: particle.color,
+                                    opacity: particle.opacity,
+                                }}
+                            />
+                        ))
+                    )}
+                </>
+            );
+        };
+
+        const DuplicateModal = ({ isOpen, message, onClose }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 flex items-center justify-center modal px-2" style={{ zIndex: 1000 }}>
+                    <div className="bg-gray-800 p-4 rounded-lg max-w-[90vw] w-full max-h-[80vh] overflow-y-auto">
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">Уведомление</h2>
+                        <p className="text-gray-300 mb-3 text-sm sm:text-base">{message}</p>
+                        <button
+                            onClick={onClose}
+                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full text-sm sm:text-base"
+                        >
+                            Закрыть
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const InstructionsModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 flex items-center justify-center modal z-50 px-2">
+                    <div className="bg-gray-800 p-4 rounded-lg max-w-[90vw] w-full max-h-[80vh] overflow-y-auto">
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">Инструкция</h2>
+                        <div className="text-gray-300 mb-3 text-sm sm:text-base space-y-4">
+                            <div>
+                                <h3 className="font-semibold mb-1">Как участвовать:</h3>
+                                <ol className="list-decimal list-inside space-y-1">
+                                    <li>Нажмите «Участвовать» в разделе «Участники».</li>
+                                    <li>Введите имя и следуйте инструкциям для оплаты.</li>
+                                    <li>Переведите 100 ₽ через СБП на +79536029130 (Озон Банк).</li>
+                                    <li>Нажмите «Оплатил».</li>
+                                    <li>Дождитесь подтверждения Администратора.</li>
+                                </ol>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold mb-1">Как работает колесо:</h3>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li>Вращается ежедневно в 20:00.</li>
+                                    <li>Таймер показывает время до вращения (ЧЧ:ММ:СС).</li>
+                                    <li>После вращения объявляется победитель.</li>
+                                    <li>В случае выигрыша администратор свяжется с вами.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold mb-1">Призовой фонд:</h3>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li>Растёт на 100 ₽ за участника.</li>
+                                    <li>Сбрасывается после вращения.</li>
+                                    <li>15% от выигрыша направляется в фонд развития.</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full text-sm sm:text-base"
+                        >
+                            Закрыть
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const WinnersModal = ({ isOpen, onClose, winnersHistory }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 flex items-center justify-center modal z-50 px-2">
+                    <div className="bg-gray-800 p-4 rounded-lg max-w-[90vw] w-full max-h-[80vh] overflow-y-auto">
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">История победителей</h2>
+                        <div className="text-gray-300 mb-3 text-sm sm:text-base">
+                            <p className="mb-1">Последние 5 победителей:</p>
+                            <ul className="list-disc pl-5">
+                                {winnersHistory.length > 0 ? (
+                                    winnersHistory.map((winner, index) => (
+                                        <li key={index} className="mb-1">
+                                            {winner.name} - {winner.prize} ₽ ({winner.date})
+                                        </li>
+                                    ))
+                                ) : (
+                                    <li>Нет данных о победителях</li>
+                                )}
+                            </ul>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full text-sm sm:text-base"
+                        >
+                            Закрыть
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const PaymentModal = ({ isOpen, onClose, name, setName, onConfirm }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 flex items-center justify-center modal px-2" style={{ zIndex: 1000 }}>
+                    <div className="bg-gray-800 p-4 rounded-lg max-w-[90vw] w-full">
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">Оплата участия</h2>
+                        <div className="mb-3">
+                            <label className="block text-gray-300 mb-1 text-sm sm:text-base">Ваше имя</label>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="Введите имя"
+                                className="p-2 w-full bg-gray-800 text-white border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            />
+                        </div>
+                        <p className="text-gray-300 mb-3 text-sm sm:text-base">
+                            Стоимость участия 100 ₽. Перевод СБП <strong>+79536029130</strong> (Озон Банк).
+                        </p>
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={() => onConfirm(name)}
+                                className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 flex-1 text-sm"
+                                disabled={!name.trim()}
+                            >
+                                Оплатил
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex-1 text-sm"
+                            >
+                                Отмена
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminNotificationModal = ({ isOpen, pendingParticipant }) => {
+            if (!isOpen || !pendingParticipant) return null;
+            return (
+                <div className="fixed inset-0 flex items-center justify-center modal px-2" style={{ zIndex: 10000 }}>
+                    <div className="bg-gray-800 p-4 rounded-lg max-w-[90vw] w-full">
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">Новый участник</h2>
+                        <p className="text-gray-300 mb-3 text-sm sm:text-base">Участник: {pendingParticipant}</p>
+                        <p className="text-gray-300 mb-3 text-sm sm:text-base">Ожидает подтверждения оплаты (100 ₽).</p>
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminPanelModal = ({ isOpen, time, onClose, onSave }) => {
+            if (!isOpen) return null;
+            const [newTime, setNewTime] = useState(time);
+            return (
+                <div className="fixed inset-0 flex items-center justify-center modal z-50 px-2">
+                    <div className="bg-gray-800 p-4 rounded-lg max-w-[90vw] w-full">
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">Admin Panel</h2>
+                        <div className="mb-3">
+                            <label className="block text-gray-300 mb-1 text-sm sm:text-base">Время розыгрыша</label>
+                            <input
+                                type="time"
+                                value={newTime}
+                                onChange={(e) => setNewTime(e.target.value)}
+                                className="p-2 w-full bg-gray-800 text-white border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            />
+                        </div>
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={() => onSave(newTime)}
+                                className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 flex-1 text-sm"
+                            >
+                                Сохранить
+                            </button>
+                            <button
+                                onClick={onClose}
+                                className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex-1 text-sm"
+                            >
+                                Отмена
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ReviewModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 flex items-center justify-center modal px-2" style={{ zIndex: 1000 }}>
+                    <div className="bg-gray-800 p-4 rounded-lg max-w-[90vw] w-full max-h-[80vh] overflow-y-auto">
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">Заявка отправлена</h2>
+                        <p className="text-gray-300 mb-3 text-sm sm:text-base">Ваша заявка на проверке. Дождитесь подтверждения.</p>
+                        <button
+                            onClick={onClose}
+                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full text-sm sm:text-base"
+                        >
+                            Закрыть
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [participants, setParticipants] = useState([]);
+            const [pendingParticipants, setPendingParticipants] = useState([]);
+            const [name, setName] = useState('');
+            const [isSpinning, setIsSpinning] = useState(false);
+            const [winner, setWinner] = useState(null);
+            const [prizePool, setPrizePool] = useState(0);
+            const [winnersHistory, setWinnersHistory] = useState([]);
+            const [showFireworks, setShowFireworks] = useState(false);
+            const [showSidebar, setShowSidebar] = useState(false);
+            const [showInstructions, setShowInstructions] = useState(false);
+            const [showWinners, setShowWinners] = useState(false);
+            const [showPaymentModal, setShowPaymentModal] = useState(false);
+            const [pendingParticipant, setPendingParticipant] = useState(null);
+            const [showAdminNotification, setShowAdminNotification] = useState(false);
+            const [showAdminPanel, setShowAdminPanel] = useState(false);
+            const [scheduledTime, setScheduledTime] = useState('20:00');
+            const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+            const [duplicateMessage, setDuplicateMessage] = useState('');
+            const [countdown, setCountdown] = useState(null);
+            const [showWinnerModal, setShowWinnerModal] = useState(false);
+            const [showReviewModal, setShowReviewModal] = useState(false);
+            const [canvasSize, setCanvasSize] = useState(300);
+            const prevPendingRef = useRef([]);
+            const spinTriggeredRef = useRef(false);
+            const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
+
+            const fetchData = async () => {
+                // Fetch participants
+                try {
+                    const res = await fetch(`${BASE_URL}/participants`);
+                    const data = res.ok ? await res.json() : [];
+                    setParticipants(data);
+                } catch (error) {
+                    console.error('Error fetching participants:', error);
+                }
+                // Fetch pending
+                try {
+                    const res = await fetch(`${BASE_URL}/pending`);
+                    const data = res.ok ? await res.json() : [];
+                    setPendingParticipants(data);
+                    setPendingParticipant(data[0] || null);
+                    setShowAdminNotification(!!data[0]);
+                } catch (error) {
+                    console.error('Error fetching pending:', error);
+                }
+                // Fetch winners
+                try {
+                    const res = await fetch(`${BASE_URL}/winners`);
+                    const data = res.ok ? await res.json() : [];
+                    setWinnersHistory(data);
+                } catch (error) {
+                    console.error('Error fetching winners:', error);
+                }
+                // Fetch prize pool
+                try {
+                    const res = await fetch(`${BASE_URL}/prizepool`);
+                    const data = res.ok ? await res.json() : { amount: 0 };
+                    setPrizePool(data.amount);
+                } catch (error) {
+                    console.error('Error fetching prize pool:', error);
+                }
+                // Fetch timer
+                try {
+                    const res = await fetch(`${BASE_URL}/timer`);
+                    const data = res.ok ? await res.json() : { time: '20:00' };
+                    setScheduledTime(data.time);
+                } catch (error) {
+                    console.error('Error fetching timer:', error);
+                }
+            };
+
+            useEffect(() => {
+                fetchData();
+                const interval = setInterval(fetchData, 5000);
+                return () => clearInterval(interval);
+            }, []);
+
+            useEffect(() => {
+                const updateCanvasSize = () => {
+                    const width = window.innerWidth;
+                    if (width < 640) {
+                        setCanvasSize(260);
+                    } else if (width < 768) {
+                        setCanvasSize(280);
+                    } else {
+                        setCanvasSize(300);
+                    }
+                };
+                updateCanvasSize();
+                window.addEventListener('resize', updateCanvasSize);
+                return () => window.removeEventListener('resize', updateCanvasSize);
+            }, []);
+
+            useEffect(() => {
+                if (!scheduledTime) return;
+                const tick = () => {
+                    const now = new Date();
+                    const [hour, minute] = scheduledTime.split(':').map(Number);
+                    let next = new Date(now);
+                    next.setHours(hour, minute, 0, 0);
+                    if (next <= now) next.setDate(next.getDate() + 1);
+                    const diff = next - now;
+                    const hh = String(Math.floor(diff / 3600000)).padStart(2, '0');
+                    const mm = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+                    const ss = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+                    setCountdown(`${hh}:${mm}:${ss}`);
+                    if (diff <= 0 && !isSpinning && !spinTriggeredRef.current) {
+                        spinTriggeredRef.current = true;
+                        handleAutoSpin();
+                    }
+                };
+                tick();
+                const id = setInterval(tick, 1000);
+                return () => clearInterval(id);
+            }, [scheduledTime, isSpinning]);
+
+            const handleAutoSpin = async () => {
+                if (isSpinning || participants.length === 0) {
+                    console.warn('Спин отменён: колесо уже вращается или нет участников');
+                    spinTriggeredRef.current = false;
+                    return;
+                }
+                setIsSpinning(true);
+                try {
+                    const res = await fetch(`${BASE_URL}/spin`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                    const data = await res.json();
+                    if (data.success && data.winner) {
+                        setWinner(data.winner);
+                        setShowFireworks(true);
+                        setTimeout(() => {
+                            setShowFireworks(false);
+                            spinTriggeredRef.current = false;
+                            fetchData();
+                        }, 7000);
+                    } else {
+                        setIsSpinning(false);
+                        spinTriggeredRef.current = false;
+                        setDuplicateMessage('Нет участников для розыгрыша');
+                        setShowDuplicateModal(true);
+                    }
+                } catch (error) {
+                    console.error('Ошибка при вращении:', error);
+                    setIsSpinning(false);
+                    spinTriggeredRef.current = false;
+                    setDuplicateMessage('Ошибка сервера при вращении');
+                    setShowDuplicateModal(true);
+                }
+            };
+
+            const handleParticipate = async () => {
+                if (!telegramId) {
+                    setShowPaymentModal(true);
+                    return;
+                }
+                try {
+                    const res = await fetch(`${BASE_URL}/pending/check?telegramId=${encodeURIComponent(telegramId)}`);
+                    const result = await res.json();
+                    if (!res.ok) {
+                        setDuplicateMessage(result.error || 'Вы уже участвуете или ожидаете подтверждения');
+                        setShowDuplicateModal(true);
+                        return;
+                    }
+                    setShowPaymentModal(true);
+                } catch (error) {
+                    console.error('Ошибка проверки участия:', error);
+                    setDuplicateMessage('Ошибка при проверке участия');
+                    setShowDuplicateModal(true);
+                }
+            };
+
+            const handlePaymentConfirm = async (name) => {
+                if (!name.trim()) return;
+                try {
+                    const res = await fetch(`${BASE_URL}/pending`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, telegramId }),
+                    });
+                    if (!res.ok) {
+                        const result = await res.json();
+                        setDuplicateMessage(result.error || 'Ошибка при регистрации');
+                        setShowDuplicateModal(true);
+                    } else {
+                        setShowPaymentModal(false);
+                        setShowReviewModal(true);
+                        setName('');
+                        fetchData();
+                    }
+                } catch (error) {
+                    console.error('Ошибка при подтверждении оплаты:', error);
+                    setDuplicateMessage('Ошибка сервера');
+                    setShowDuplicateModal(true);
+                }
+            };
+
+            useEffect(() => {
+                if (prevPendingRef.current.length > 0 && pendingParticipants.length === 0) {
+                    fetchData();
+                }
+                prevPendingRef.current = pendingParticipants;
+            }, [pendingParticipants]);
+
+            return (
+                <div className="min-h-screen flex flex-col p-2 bg-gray-900 relative">
+                    <DuplicateModal
+                        isOpen={showDuplicateModal}
+                        message={duplicateMessage}
+                        onClose={() => setShowDuplicateModal(false)}
+                    />
+                    <ReviewModal isOpen={showReviewModal} onClose={() => { setShowReviewModal(false); fetchData(); }} />
+                    {/* WinnerModal removed: winner displayed under wheel after spin */}
+                    <button
+                        onClick={() => setShowSidebar(true)}
+                        className="fixed top-2 left-2 p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 z-50"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <div
+                        className={`fixed top-0 left-0 h-full w-full bg-gray-800 p-4 sidebar ${showSidebar ? '' : 'sidebar-hidden'} z-50`}
+                    >
+                        <button
+                            onClick={() => setShowSidebar(false)}
+                            className="absolute top-2 right-2 text-white hover:text-gray-300"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 6l12 12M6 18L18 6" />
+                            </svg>
+                        </button>
+                        <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">Меню</h2>
+                        <button
+                            disabled
+                            className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg text-left text-sm mb-2"
+                        >
+                            Личный кабинет (в разработке)
+                        </button>
+                        <button
+                            onClick={() => { setShowInstructions(true); setShowSidebar(false); }}
+                            className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-left text-sm mb-2"
+                        >
+                            Инструкция
+                        </button>
+                        <button
+                            onClick={() => { setShowWinners(true); setShowSidebar(false); }}
+                            className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-left text-sm mb-2"
+                        >
+                            История победителей
+                        </button>
+                        {isAdmin && (
+                            <button
+                                onClick={() => { setShowAdminPanel(true); setShowSidebar(false); }}
+                                className="w-full px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-left text-sm mb-2"
+                            >
+                                Admin Panel
+                            </button>
+                        )}
+                    </div>
+                    <InstructionsModal isOpen={showInstructions} onClose={() => setShowInstructions(false)} />
+                    <WinnersModal isOpen={showWinners} onClose={() => setShowWinners(false)} winnersHistory={winnersHistory} />
+                    <PaymentModal
+                        isOpen={showPaymentModal}
+                        onClose={() => setShowPaymentModal(false)}
+                        name={name}
+                        setName={setName}
+                        onConfirm={handlePaymentConfirm}
+                    />
+                    {isAdmin && (
+                        <AdminNotificationModal
+                            isOpen={showAdminNotification}
+                            pendingParticipant={pendingParticipant}
+                        />
+                    )}
+                    {isAdmin && (
+                        <AdminPanelModal
+                            isOpen={showAdminPanel}
+                            time={scheduledTime}
+                            onClose={() => setShowAdminPanel(false)}
+                            onSave={async (newTime) => {
+                                try {
+                                    await fetch(`${BASE_URL}/timer`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ time: newTime }),
+                                    });
+                                    setScheduledTime(newTime);
+                                    setShowAdminPanel(false);
+                                } catch (error) {
+                                    console.error('Ошибка сохранения времени:', error);
+                                    setDuplicateMessage('Ошибка сохранения времени');
+                                    setShowDuplicateModal(true);
+                                }
+                            }}
+                        />
+                    )}
+                    <div className="flex-1 flex flex-col items-center justify-start max-w-[100vw] mx-auto">
+                        <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+                            <div style={{
+                                position: 'absolute', left: '50%', bottom: '100%', transform: 'translateX(-50%) translateY(-25%)',
+                                width: '90%', height: '38px', background: 'rgba(255,224,102,0.85)', filter: 'blur(18px)',
+                                borderRadius: '30px', zIndex: 3, pointerEvents: 'none'
+                            }}></div>
+                            <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-white text-center" style={{ position: 'relative', zIndex: 4 }}>
+                                Колесо Фортуны
+                            </h1>
+                        </div>
+                        <p className="mb-3 text-lg sm:text-xl text-white text-center">
+                            Призовой фонд: <span style={{ color: '#22c55e', fontSize: '1.4em', fontWeight: 'bold' }}>{prizePool} ₽</span>
+                        </p>
+                        {countdown && (
+                            <div className="text-center mb-3">
+                                <h2 className="text-lg sm:text-xl font-bold mb-1" style={{ WebkitTextStroke: '0.5px #1E40AF', color: '#FFD700' }}>
+                                    Следующий розыгрыш
+                                </h2>
+                                <p className="text-base sm:text-lg text-gray-300 digital-timer">
+                                    Запуск через: <span style={{ fontSize: '1.35em', color: '#fff', fontWeight: 'bold', textShadow: '0 2px 8px #000, 0 0 2px #fff' }}>
+                                        {countdown}
+                                    </span>
+                                </p>
+                            </div>
+                        )}
+                        {showFireworks && <Fireworks />}
+                        <CustomWheel
+                            mustStartSpinning={isSpinning}
+                            data={participants.length > 0 ? participants.map(p => ({ option: p })) : [{ option: 'Нет участников', color: '#444' }]}
+                            onStopSpinning={async () => {
+                                setIsSpinning(false);
+                                spinTriggeredRef.current = false;
+                                try {
+                                    const res = await fetch(`${BASE_URL}/spin`, { method: 'POST' });
+                                    const data = await res.json();
+                                    if (data.success && data.winner) {
+                                        setWinner({ name: data.winner, prize: prizePool });
+                                        setShowWinnerOverlay(true);
+                                        // hide overlay and reset after 5 seconds
+                                        setTimeout(() => {
+                                            setShowWinnerOverlay(false);
+                                            setWinner(null);
+                                        }, 5000);
+                                        // refresh participants and prize pool history
+                                        fetchData();
+                                    }
+                                } catch (err) {
+                                    console.error('Error saving winner:', err);
+                                }
+                            }}
+                            spinTime={5}
+                        />
+                        {/* Winner overlay */}
+                        {showWinnerOverlay && winner && (
+                            <div className="winner-overlay">
+                                <h2 className="text-3xl font-bold">Победитель!</h2>
+                                <p className="text-2xl">{winner.name}</p>
+                            </div>
+                        )}
+                    </div>
+                    <div className="w-full p-2 bg-gray-800 rounded-lg mt-2">
+                        <div className="flex flex-col mb-2">
+                            {/* Temporary launch button for testing */}
+                            <button
+                                onClick={() => setIsSpinning(true)}
+                                className="px-4 py-2 bg-red-600 text-white rounded-xl text-base font-semibold shadow-lg focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200 mb-2"
+                                disabled={isSpinning}
+                            >
+                                Запустить
+                            </button>
+                            <button
+                                onClick={handleParticipate}
+                                className="participate-btn px-4 py-2 text-white rounded-xl text-base font-semibold shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-200"
+                                disabled={isSpinning}
+                            >
+                                Участвовать
+                            </button>
+                        </div>
+                        <h2 className="text-lg sm:text-xl font-semibold mb-2 text-white">Участники</h2>
+                        <ul className="list-decimal pl-5 text-gray-300 text-sm">
+                            {participants.length > 0 ? (
+                                participants.map((p, i) => (
+                                    <li key={i} className="flex items-center">
+                                        <span>{i + 1}. {p}</span>
+                                    </li>
+                                ))
+                            ) : (
+                                <li>Нет участников</li>
+                            )}
+                        </ul>
+                        {pendingParticipants.length > 0 && (
+                            <div className="mt-2">
+                                <h3 className="text-base sm:text-lg font-semibold mb-1 text-white">Ожидают подтверждения:</h3>
+                                <ul className="list-disc pl-5 text-gray-300 text-sm">
+                                    {pendingParticipants.map((p, i) => (
+                                        <li key={i}>{p}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const rootEl = document.getElementById('root');
+        try {
+            ReactDOM.render(<App />, rootEl);
+        } catch (e) {
+            rootEl.innerHTML = '<pre style="color:red; white-space: pre-wrap;">' + e.stack + '</pre>';
+        }
+    </script>
+</body>
+</html>

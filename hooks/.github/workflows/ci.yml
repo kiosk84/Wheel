@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NEXT_PUBLIC_API_URL: "https://aidevil-production.up.railway.app"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Check server syntax
+      run: |
+        node --check server.js
+        node --check functions/index.js
+
+  frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Debug NEXT_PUBLIC_API_URL
+        run: echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js for frontend
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Lint frontend
+        run: npm run lint
+        working-directory: frontend
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend

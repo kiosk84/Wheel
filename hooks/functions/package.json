@@ -1,0 +1,28 @@
+{
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "node index.js",
+    "start:dev": "cross-env NODE_ENV=development node index.js",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.0.3",
+    "express": "^4.21.2",
+    "node-schedule": "^2.1.1",
+    "sqlite3": "^5.1.7",
+    "telegraf": "^3.38.1",
+    "winston": "^3.8.2"
+  },
+  "private": true
+}

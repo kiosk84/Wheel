@@ -1,0 +1,412 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const express = require('express');
+const cors = require('cors'); // Added cors
+const { Telegraf } = require('telegraf');
+
+// API routes (Imported from server.js)
+const participantsRoute = require('./routes/participants');
+const pendingRoute = require('./routes/pending'); // Note: This might conflict with the /pending route defined below
+const winnersRoute = require('./routes/winners');
+const prizepoolRoute = require('./routes/prizepool');
+const spinRoute = require('./routes/spin');
+const timerRoute = require('./routes/timer');
+const startIdsRoute = require('./routes/start-ids');
+const stateRoute = require('./routes/state');
+const telegramAuthRoute = require('./routes/telegram-auth');
+const db = require('./db'); // Import database module
+
+// Initialize Express
+const app = express();
+
+// Middleware (Combined from server.js and functions/index.js)
+// Log all incoming HTTP requests
+app.use((req, res, next) => { console.log(`REQ ${req.method} ${req.url} from ${req.ip}`); next(); });
+// CORS configuration
+app.use(cors({
+  origin: '*'
+}));
+app.use(express.json()); // Replaced bodyParser.json()
+
+// Removed in-memory storage for pending/participants
+// const pending = new Map();
+// const participantsList = new Set();
+
+// Bot setup (Kept from original functions/index.js)
+const BOT_TOKEN = process.env.BOT_TOKEN;
+if (!BOT_TOKEN) {
+  console.error("Error: BOT_TOKEN is not defined in .env");
+  process.exit(1);
+}
+const ADMIN_ID = process.env.ADMIN_ID;
+const HOST = process.env.HOST_URL; // Used for Web App URL in bot message
+
+// Track next spin time for front-end (Kept from original functions/index.js)
+let nextSpinTime = null;
+function scheduleNextSpin() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(20, 0, 0, 0); // 20:00:00 сегодня
+  if (now >= next) {
+    next.setDate(next.getDate() + 1);
+  }
+  nextSpinTime = next;
+  setTimeout(async () => {
+    try {
+      const runLottery = require('./services/lottery');
+      await runLottery();
+      console.log('Авто-розыгрыш завершён!');
+    } catch (e) {
+      console.error('Ошибка авто-розыгрыша:', e);
+    }
+    scheduleNextSpin();
+  }, next - now);
+}
+// Initialize next spin schedule
+scheduleNextSpin();
+
+const bot = new Telegraf(BOT_TOKEN);
+const users = new Set();
+
+// Handle /start
+bot.start(async (ctx) => {
+  try {
+    const id = ctx.from.id.toString();
+    users.add(id);
+    const isAdmin = id === ADMIN_ID;
+    if (isAdmin) {
+      await ctx.reply('Добро пожаловать, админ! 👑\nВыберите действие:', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '👥 Список участников', callback_data: 'getParticipants' }, { text: '🏆 Победители', callback_data: 'getWinners' }],
+            [{ text: '💰 Призовой фонд', callback_data: 'getPrizePool' }, { text: '🔄 Сброс', callback_data: 'reset' }],
+            [{ text: '➕ Добавить участника', callback_data: 'addParticipant' }, { text: '🗑 Удалить участника', callback_data: 'deletePrompt' }],
+            [{ text: '📊 Статистика', callback_data: 'getStats' }, { text: '⏰ Установить таймер', callback_data: 'timerPrompt' }],
+            [{ text: '🌐 Открыть приложение', web_app: { url: process.env.FRONTEND_URL || 'https://wheel-woad.vercel.app/' } }]
+          ]
+        }
+      });
+    } else {
+      await ctx.reply(`👋 Добро пожаловать в игру «Колесо Фортуны»!\n✨ Ты на шаг ближе к тому, чтобы испытать удачу и сорвать куш! 🔥\n\n🎁 Каждый день в 20:00 мы разыгрываем призовой фонд среди участников игры.\n✅ Всё честно, прозрачно и в реальном времени!\n\n⏰ Следующий розыгрыш уже скоро — не упусти шанс стать победителем! 🍀`, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '➡️ Открыть приложение', web_app: { url: 'https://wheel-woad.vercel.app/' } }
+            ]
+          ]
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error in /start:', err);
+    await ctx.reply('Произошла ошибка. Попробуйте позже.');
+  }
+});
+
+// Handle admin approve/reject callbacks (Moved before API routes mounting)
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  console.log('Received callback query:', data); // Log received data
+
+  // Handle pending approval/rejection based on name (format: approve_NAME or reject_NAME)
+  if (data.startsWith('approve_') || data.startsWith('reject_')) {
+    const parts = data.split('_');
+    const action = parts[0];
+    const name = parts.slice(1).join('_'); // Re-join name if it contained underscores
+
+    try {
+      // Find the user in the pending table by name
+      db.get('SELECT telegramId FROM pending WHERE name = ?', [name], async (err, pendingUser) => {
+        if (err) {
+          console.error('DB error fetching pending user:', err);
+          await ctx.answerCbQuery('Ошибка базы данных');
+          return;
+        }
+        if (!pendingUser) {
+          console.warn(`Pending user not found for name: ${name}`);
+          await ctx.answerCbQuery('Заявка не найдена или уже обработана');
+          return;
+        }
+
+        const telegramId = pendingUser.telegramId;
+
+        if (action === 'approve') {
+          // Move from pending to participants
+          db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+            db.run('INSERT INTO participants (name, telegramId) VALUES (?, ?)', [name, telegramId], (insertErr) => {
+              if (insertErr) {
+                console.error('DB error inserting participant:', insertErr);
+                db.run('ROLLBACK');
+                ctx.answerCbQuery('Ошибка добавления участника');
+                return;
+              }
+              db.run('DELETE FROM pending WHERE name = ?', [name], (deleteErr) => {
+                if (deleteErr) {
+                  console.error('DB error deleting pending:', deleteErr);
+                  db.run('ROLLBACK');
+                  ctx.answerCbQuery('Ошибка удаления заявки');
+                  return;
+                }
+                // Increment prize pool (assuming table prize_pool exists with id=1)
+                db.run('UPDATE prize_pool SET amount = amount + 100 WHERE id = 1', (poolErr) => {
+                   if (poolErr) console.error('Prize pool update error:', poolErr); // Log error but continue
+                   db.run('COMMIT', async (commitErr) => {
+                     if (commitErr) {
+                        console.error('DB commit error:', commitErr);
+                        ctx.answerCbQuery('Ошибка сохранения');
+                        return;
+                     }
+                     console.log(`User ${name} (${telegramId}) approved.`);
+
+                     // Получаем текущее количество участников и призовой фонд
+                     db.get('SELECT COUNT(*) as count FROM participants', async (countErr, countRow) => {
+                       const participantsCount = countRow?.count || 1;
+                       const winChance = (100 / participantsCount).toFixed(2);
+
+                       db.get('SELECT amount FROM prize_pool WHERE id = 1', async (prizeErr, prizeRow) => {
+                         const prizePool = prizeRow?.amount || 100;
+
+                         // Отправляем подробное уведомление пользователю с кнопкой открытия приложения
+                         await bot.telegram.sendMessage(telegramId,
+                           `✅ Ваше участие подтверждено!\n\n` +
+                           `👤 Имя: ${name}\n` +
+                           `👥 Всего участников: ${participantsCount}\n` +
+                           `💰 Текущий призовой фонд: ${prizePool}₽\n` +
+                           `🎯 Ваш шанс на победу: ${winChance}%\n\n` +
+                           `⏰ Ожидайте розыгрыш! Удачи! 🍀`,
+                           {
+                             reply_markup: {
+                               inline_keyboard: [
+                                 [{ text: '🎮 Открыть приложение', web_app: { url: process.env.FRONTEND_URL || 'https://wheel-woad.vercel.app/' } }]
+                               ]
+                             }
+                           }
+                         );
+
+                         // Обновляем сообщение для админа
+                         await ctx.editMessageText(
+                           `✅ Участник ${name} подтвержден.\n\n` +
+                           `👥 Всего участников: ${participantsCount}\n` +
+                           `💰 Призовой фонд: ${prizePool}₽`
+                         );
+
+                         await ctx.answerCbQuery('Подтверждено');
+                       });
+                     });
+                   });
+                });
+              });
+            });
+          });
+        } else if (action === 'reject') {
+          // Just remove from pending
+          db.run('DELETE FROM pending WHERE name = ?', [name], async (deleteErr) => {
+            if (deleteErr) {
+              console.error('DB error deleting pending:', deleteErr);
+              await ctx.answerCbQuery('Ошибка удаления заявки');
+              return;
+            }
+            console.log(`User ${name} (${telegramId}) rejected.`);
+
+            // Отправляем подробное уведомление пользователю с контактами поддержки и кнопкой
+            await bot.telegram.sendMessage(telegramId,
+              `❌ Ваша заявка на участие отклонена.\n\n` +
+              `Возможные причины:\n` +
+              `• Не найден платеж\n` +
+              `• Неверная сумма платежа\n` +
+              `• Другая проблема с платежом\n\n` +
+              `Для уточнения деталей и повторной подачи заявки, пожалуйста, свяжитесь с поддержкой:\n` +
+              `📱 Telegram: @support_contact\n` +
+              `📧 Email: support@example.com`,
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🔄 Попробовать снова', web_app: { url: process.env.FRONTEND_URL || 'https://wheel-woad.vercel.app/' } }]
+                  ]
+                }
+              }
+            );
+
+            // Обновляем сообщение для админа
+            await ctx.editMessageText(`❌ Заявка участника ${name} отклонена.`);
+            await ctx.answerCbQuery('Отклонено');
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error processing callback query:', error);
+      await ctx.answerCbQuery('Внутренняя ошибка');
+    }
+  } else if (data === 'getParticipants') {
+    // Вывод списка участников
+    db.all('SELECT name FROM participants', async (err, rows) => {
+      if (err) return ctx.reply('Ошибка базы данных');
+      if (!rows.length) return ctx.reply('Нет участников');
+      const list = rows.map((r, i) => `${i + 1}. ${r.name}`).join('\n');
+      await ctx.reply(`Список участников:\n${list}`);
+    });
+  } else if (data === 'getWinners') {
+    // Вывод истории победителей
+    db.all('SELECT name, prize, timestamp FROM winners ORDER BY timestamp DESC LIMIT 10', async (err, rows) => {
+      if (err) return ctx.reply('Ошибка базы данных');
+      if (!rows.length) return ctx.reply('Победителей пока нет');
+      const list = rows.map(r => `${r.name} — ${r.prize}₽ (${new Date(r.timestamp).toLocaleString('ru-RU')})`).join('\n');
+      await ctx.reply(`Последние победители:\n${list}`);
+    });
+  } else if (data === 'getPrizePool') {
+    // Вывод призового фонда
+    db.get('SELECT amount FROM prize_pool WHERE id = 1', async (err, row) => {
+      if (err) return ctx.reply('Ошибка базы данных');
+      await ctx.reply(`Текущий призовой фонд: ${row?.amount || 0}₽`);
+    });
+  } else if (data === 'reset') {
+    // Сброс участников и призового фонда
+    db.serialize(() => {
+      db.run('DELETE FROM participants');
+      db.run('DELETE FROM pending');
+      db.run('UPDATE prize_pool SET amount = 0 WHERE id = 1');
+    });
+    await ctx.reply('Все участники и призовой фонд сброшены!');
+  } else if (data === 'timerPrompt') {
+    // Запросить/показать текущее время розыгрыша (заглушка)
+    await ctx.reply('Введите время следующего розыгрыша в формате ЧЧ:ММ (например 20:00):');
+    ctx.session.waitingForTimer = true;
+  } else if (data === 'deletePrompt') {
+    // Запросить имя для удаления участника
+    await ctx.reply('Введите имя участника, которого нужно удалить, командой: /delete Имя');
+  } else if (data === 'addParticipant') {
+    // Запросить имя для добавления участника
+    await ctx.reply('Введите имя нового участника командой: /add Имя');
+  } else if (data === 'getStats') {
+    // Показать статистику
+    db.serialize(() => {
+      db.get('SELECT COUNT(*) as count FROM participants', async (err, participantsRow) => {
+        if (err) return ctx.reply('Ошибка базы данных');
+
+        db.get('SELECT COUNT(*) as count FROM pending', async (err, pendingRow) => {
+          if (err) return ctx.reply('Ошибка базы данных');
+
+          db.get('SELECT amount FROM prize_pool WHERE id = 1', async (err, prizeRow) => {
+            if (err) return ctx.reply('Ошибка базы данных');
+
+            const stats = `📊 Статистика:\n\n` +
+                          `👥 Участников: ${participantsRow?.count || 0}\n` +
+                          `⏳ Ожидают подтверждения: ${pendingRow?.count || 0}\n` +
+                          `💰 Призовой фонд: ${prizeRow?.amount || 0}₽\n` +
+                          `⏰ Следующий розыгрыш: ${nextSpinTime ? nextSpinTime.toLocaleTimeString('ru-RU') : 'Не запланирован'}`;
+
+            await ctx.reply(stats);
+          });
+        });
+      });
+    });
+  } else {
+    // Handle other callback queries if necessary
+    console.log(`Unhandled callback query data: ${data}`);
+    // Consider calling next() if using middleware pattern or just answering
+    await ctx.answerCbQuery(); // Acknowledge other callbacks silently
+  }
+});
+
+// Handle /delete command
+bot.command('delete', async (ctx) => {
+  const id = ctx.from.id.toString();
+  if (id !== ADMIN_ID) return ctx.reply('Только админ может удалять участников.');
+  const args = ctx.message.text.split(' ').slice(1);
+  if (!args.length) return ctx.reply('Укажите имя участника: /delete Имя');
+  const name = args.join(' ');
+  db.get('SELECT * FROM participants WHERE name = ?', [name], (err, row) => {
+    if (err) return ctx.reply('Ошибка базы данных');
+    if (!row) return ctx.reply('Участник не найден');
+    db.run('DELETE FROM participants WHERE name = ?', [name], (err2) => {
+      if (err2) return ctx.reply('Ошибка при удалении');
+      ctx.reply(`Участник ${name} удалён.`);
+    });
+  });
+});
+
+// Handle /add command - добавление участника админом
+bot.command('add', async (ctx) => {
+  const id = ctx.from.id.toString();
+  if (id !== ADMIN_ID) return ctx.reply('Только админ может добавлять участников.');
+  const args = ctx.message.text.split(' ').slice(1);
+  if (!args.length) return ctx.reply('Укажите имя участника: /add Имя');
+  const name = args.join(' ');
+
+  // Проверяем, существует ли уже участник с таким именем
+  db.get('SELECT 1 FROM participants WHERE name = ?', [name], (err, row) => {
+    if (err) return ctx.reply('Ошибка базы данных');
+    if (row) return ctx.reply('Участник с таким именем уже существует');
+
+    // Генерируем уникальный telegramId для участника, добавленного админом
+    const adminAddedId = `admin_added_${Date.now()}`;
+
+    // Добавляем участника
+    db.run('INSERT INTO participants (name, telegramId) VALUES (?, ?)', [name, adminAddedId], (err2) => {
+      if (err2) return ctx.reply('Ошибка при добавлении участника');
+
+      // Увеличиваем призовой фонд
+      db.run('UPDATE prize_pool SET amount = amount + 100 WHERE id = 1', (err3) => {
+        if (err3) {
+          console.error('Ошибка обновления призового фонда:', err3);
+          return ctx.reply('Участник добавлен, но возникла ошибка при обновлении призового фонда');
+        }
+
+        ctx.reply(`✅ Участник ${name} успешно добавлен!\n💰 Призовой фонд увеличен на 100₽`);
+      });
+    });
+  });
+});
+
+// Health check endpoint for Railway
+app.get('/', (req, res) => res.sendStatus(200));
+app.get('/healthz', (req, res) => res.send('OK'));
+
+// Mount API routes
+app.use('/participants', participantsRoute);
+app.use('/pending', pendingRoute);
+app.use('/winners', winnersRoute);
+app.use('/prizepool', prizepoolRoute);
+app.use('/spin', spinRoute);
+app.use('/timer', timerRoute);
+app.use('/start-ids', startIdsRoute);
+app.use('/state', stateRoute);
+app.use('/telegram-auth', telegramAuthRoute);
+
+// Start Express server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Express server listening on port ${PORT}`));
+
+// --- Bot Launch and Server Start ---
+
+// Launch bot (Kept from original functions/index.js)
+// Make sure bot is launched *after* routes and handlers are defined
+bot.launch({ polling: true }) // Using polling as in original functions/index.js
+  .then(() => console.log('Bot launched successfully (polling)'))
+  .catch(err => console.error('Bot launch error:', err));
+
+// Graceful shutdown (Kept from original functions/index.js)
+process.once('SIGINT', () => { console.log("SIGINT received, stopping bot..."); bot.stop('SIGINT'); process.exit(0); });
+process.once('SIGTERM', () => { console.log("SIGTERM received, stopping bot..."); bot.stop('SIGTERM'); process.exit(0); });
+
+// API routes defined directly in this file (Kept from original functions/index.js)
+// Frontend notification API
+app.post('/notify', async (req, res) => {
+  const { telegramId, message } = req.body;
+  if (!telegramId || !message) return res.status(400).json({ error: 'Missing telegramId or message' });
+  try {
+    await bot.telegram.sendMessage(telegramId, message);
+    res.json({ status: 'ok' });
+  } catch (err) {
+    console.error('Error sending message:', err);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Removed direct definitions for POST /pending and GET /pending/check
+// These are now handled by functions/routes/pending.js
+
+// Export bot and app for potential use in routes or other modules
+module.exports = { app, bot, ADMIN_ID };

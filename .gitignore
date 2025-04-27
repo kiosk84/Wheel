@@ -1,0 +1,20 @@
+# General
+node_modules
+*.log
+.env
+.vercel
+
+# Next.js
+.next
+out
+build
+
+# Testing
+coverage
+
+# Database
+functions/db/fortune.db
+
+# OS-specific
+.DS_Store
+Thumbs.db
