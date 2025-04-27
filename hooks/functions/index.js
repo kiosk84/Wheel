@@ -28,6 +28,8 @@ app.use(cors({
   origin: '*'
 }));
 app.use(express.json()); // Replaced bodyParser.json()
+// Health check endpoint for CI and load balancer
+app.get('/healthz', (req, res) => res.status(200).send('OK'));
 
 // Removed in-memory storage for pending/participants
 // const pending = new Map();
@@ -362,7 +364,6 @@ bot.command('add', async (ctx) => {
 
 // Health check endpoint for Railway
 app.get('/', (req, res) => res.sendStatus(200));
-app.get('/healthz', (req, res) => res.send('OK'));
 
 // Mount API routes
 app.use('/participants', participantsRoute);
