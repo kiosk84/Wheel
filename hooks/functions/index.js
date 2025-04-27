@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors'); // Added cors
 const { Telegraf } = require('telegraf');
+const session = require('telegraf/session'); // Added session middleware
 
 // API routes (Imported from server.js)
 const participantsRoute = require('./routes/participants');
@@ -30,6 +31,9 @@ app.use(cors({
 app.use(express.json()); // Replaced bodyParser.json()
 // Health check endpoint for CI and load balancer
 app.get('/healthz', (req, res) => res.status(200).send('OK'));
+
+// Подключаем роут /timer
+app.use('/timer', timerRoute);
 
 // Removed in-memory storage for pending/participants
 // const pending = new Map();
@@ -69,6 +73,7 @@ function scheduleNextSpin() {
 scheduleNextSpin();
 
 const bot = new Telegraf(BOT_TOKEN);
+bot.use(session()); // Initialize session middleware
 const users = new Set();
 
 // Handle /start
@@ -310,6 +315,28 @@ bot.on('callback_query', async (ctx) => {
     // Consider calling next() if using middleware pattern or just answering
     await ctx.answerCbQuery(); // Acknowledge other callbacks silently
   }
+});
+
+// Handle text input for timerPrompt
+bot.on('text', async (ctx, next) => {
+  if (ctx.session.waitingForTimer) {
+    const text = ctx.message.text.trim();
+    const m = text.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (m) {
+      const [_, hh, mm] = m;
+      const now = new Date();
+      const scheduled = new Date(now);
+      scheduled.setHours(Number(hh), Number(mm), 0, 0);
+      if (scheduled <= now) scheduled.setDate(scheduled.getDate() + 1);
+      nextSpinTime = scheduled;
+      await ctx.reply(`Следующий розыгрыш установлен на ${hh}:${mm}`);
+      ctx.session.waitingForTimer = false;
+    } else {
+      await ctx.reply('Неверный формат. Введите время в формате ЧЧ:ММ');
+    }
+    return;
+  }
+  return next();
 });
 
 // Handle /delete command

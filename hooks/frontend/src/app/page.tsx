@@ -9,28 +9,9 @@ import Sidebar from '../components/Sidebar';
 import InstructionModal from '../components/InstructionModal';
 import HistoryModal from '../components/HistoryModal';
 import DuplicateModal from '../components/DuplicateModal';
-import SplashScreen from '../components/SplashScreen';
 import ParticipateModalNew from '../components/ParticipateModalNew';
 
-function StartScreen({ onStart, telegramId }: { onStart: (id: string) => void, telegramId: string }) {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#181A20] text-white">
-      <h1 className="text-2xl font-bold mb-6">Колесо Фортуны</h1>
-      <p className="mb-4 text-sm">Добро пожаловать! Для продолжения нажмите кнопку ниже.</p>
-      <button
-        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl text-lg shadow-lg"
-        onClick={() => onStart(telegramId)}
-      >
-        Старт
-      </button>
-      <div className="mt-6 text-xs text-gray-400 select-all">
-        Ваш Telegram ID: <span className="font-mono text-blue-400">{telegramId || 'не определён'}</span>
-      </div>
-    </div>
-  );
-}
-
-export default function Home() {
+function Home() {
   const [participants, setParticipants] = useState<string[]>([]);
   const [pendingUsers, setPendingUsers] = useState<string[]>([]);
   const [prizePool, setPrizePool] = useState<number>(0);
@@ -44,7 +25,6 @@ export default function Home() {
   const [spinning, setSpinning] = useState(false);
   const [showParticipateModal, setShowParticipateModal] = useState(false);
   const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null);
-  const [showStartScreen, setShowStartScreen] = useState(true);
 
   // Проверка, открыт ли WebApp в Telegram
   // const [notInTelegram, setNotInTelegram] = useState(false);
@@ -89,11 +69,6 @@ export default function Home() {
     }
     // TimerDisplay handles timer polling and auto-spin
     // Removed the redundant interval here
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 2000);
-    return () => clearTimeout(timer);
   }, []);
 
   // Постоянно пытаемся получить telegramId из Telegram WebApp, пока не появится
@@ -280,26 +255,6 @@ export default function Home() {
     }
   };
 
-  // Новый обработчик для кнопки Старт
-  const handleStart = async (id: string) => {
-    // Сохраняем id в отдельный список стартовых пользователей через API
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/start-ids`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId: id }),
-      });
-    } catch (e) {
-      // Не блокируем, если не удалось сохранить
-      console.warn('Не удалось сохранить стартовый Telegram ID:', e);
-    }
-    setShowStartScreen(false);
-  };
-
-  if (loading) return <SplashScreen />;
-  if (showStartScreen) {
-    return <StartScreen onStart={handleStart} telegramId={telegramId} />;
-  }
   return (
     <div className="relative min-h-screen flex flex-col bg-[#181A20]">
       <Navbar onMenuToggleAction={() => setSidebarOpen(true)} />
@@ -362,3 +317,5 @@ export default function Home() {
     </div>
   );
 }
+
+export default Home;
