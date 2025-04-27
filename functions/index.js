@@ -12,6 +12,9 @@ const winnersRoute = require('./routes/winners');
 const prizepoolRoute = require('./routes/prizepool');
 const spinRoute = require('./routes/spin');
 const timerRoute = require('./routes/timer');
+const startIdsRoute = require('./routes/start-ids');
+const stateRoute = require('./routes/state');
+const telegramAuthRoute = require('./routes/telegram-auth');
 const db = require('./db'); // Import database module
 
 // Initialize Express
@@ -357,16 +360,32 @@ bot.command('add', async (ctx) => {
   });
 });
 
-// --- API Endpoints ---
-
-// Mount API endpoints from routes/ (Copied from server.js)
+// Mount API routes
 app.use('/participants', participantsRoute);
-app.use('/pending', pendingRoute); // Uncommented: Use routes from pending.js
+app.use('/pending', pendingRoute);
 app.use('/winners', winnersRoute);
 app.use('/prizepool', prizepoolRoute);
 app.use('/spin', spinRoute);
 app.use('/timer', timerRoute);
-app.use('/start-ids', require('./routes/start-ids'));
+app.use('/start-ids', startIdsRoute);
+app.use('/state', stateRoute);
+app.use('/telegram-auth', telegramAuthRoute);
+
+// Start Express server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Express server listening on port ${PORT}`));
+
+// --- Bot Launch and Server Start ---
+
+// Launch bot (Kept from original functions/index.js)
+// Make sure bot is launched *after* routes and handlers are defined
+bot.launch({ polling: true }) // Using polling as in original functions/index.js
+  .then(() => console.log('Bot launched successfully (polling)'))
+  .catch(err => console.error('Bot launch error:', err));
+
+// Graceful shutdown (Kept from original functions/index.js)
+process.once('SIGINT', () => { console.log("SIGINT received, stopping bot..."); bot.stop('SIGINT'); process.exit(0); });
+process.once('SIGTERM', () => { console.log("SIGTERM received, stopping bot..."); bot.stop('SIGTERM'); process.exit(0); });
 
 // API routes defined directly in this file (Kept from original functions/index.js)
 // Frontend notification API
@@ -384,36 +403,6 @@ app.post('/notify', async (req, res) => {
 
 // Removed direct definitions for POST /pending and GET /pending/check
 // These are now handled by functions/routes/pending.js
-
-// --- Bot Launch and Server Start ---
-
-// Launch bot (Kept from original functions/index.js)
-// Make sure bot is launched *after* routes and handlers are defined
-bot.launch({ polling: true }) // Using polling as in original functions/index.js
-  .then(() => console.log('Bot launched successfully (polling)'))
-  .catch(err => console.error('Bot launch error:', err));
-
-// Graceful shutdown (Kept from original functions/index.js)
-process.once('SIGINT', () => { console.log("SIGINT received, stopping bot..."); bot.stop('SIGINT'); process.exit(0); });
-process.once('SIGTERM', () => { console.log("SIGTERM received, stopping bot..."); bot.stop('SIGTERM'); process.exit(0); });
-
-
-// Start Express server (Using port from server.js logic)
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Express server running at http://0.0.0.0:${PORT}`);
-  // Optional: Set webhook if HOST_URL and WEBHOOK_PATH are defined (alternative to polling)
-  // const webhookPath = process.env.WEBHOOK_PATH;
-  // if (HOST && webhookPath) {
-  //   const webhookUrl = `${HOST}${webhookPath}`;
-  //   bot.telegram.setWebhook(webhookUrl)
-  //     .then(() => console.log(`Webhook set to ${webhookUrl}`))
-  //     .catch(err => console.error('Error setting webhook:', err));
-  //   // Need to handle webhook updates on a specific route, e.g., app.use(bot.webhookCallback(webhookPath));
-  // } else {
-  //   console.log("Polling mode enabled. HOST_URL or WEBHOOK_PATH not fully configured for webhook mode.");
-  // }
-});
 
 // Export bot and app for potential use in routes or other modules
 module.exports = { app, bot, ADMIN_ID };
