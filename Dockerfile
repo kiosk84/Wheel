@@ -4,5 +4,5 @@ WORKDIR /app/hooks/functions
 COPY hooks/functions/package.json hooks/functions/package-lock.json ./
 RUN npm install --production
 COPY hooks/functions .
-EXPOSE 8080
+EXPOSE 3001
 CMD ["npm", "start"]
